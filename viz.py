@@ -137,7 +137,7 @@ def add_aux_rectangles(fig, df, df_full, window_start, window_end):
         x0=window_start, y0=0,
         x1=window_end, y1=1,
         fillcolor='blue',
-        opacity=0.2,
+        opacity=0.1,
         layer='below',
         line_width=0
     )
@@ -154,7 +154,7 @@ def add_aux_rectangles(fig, df, df_full, window_start, window_end):
         x0=0, y0=safe_min,
         x1=1, y1=safe_max,
         fillcolor='green',
-        opacity=0.2,
+        opacity=0.1,
         layer='below',
         line_width=0
     )
@@ -167,8 +167,8 @@ def add_aux_rectangles(fig, df, df_full, window_start, window_end):
                     fig.add_shape(
                         type='rect',
                         xref='x', yref='paper',
-                        x0=i - timedelta(seconds=3), y0=0,
-                        x1=i + timedelta(seconds=3), y1=1,
+                        x0=i - timedelta(seconds=10), y0=0,
+                        x1=i + timedelta(seconds=10), y1=1,
                         fillcolor='red',
                         opacity=0.2,
                         layer='below',
@@ -258,9 +258,10 @@ def input_page(garmin_df):
     # preparing data
     user_ids = garmin_df.user_id.tolist()
     rank_options = garmin_df['rank'].unique().tolist()
-    weight_min, weight_max = garmin_df.weight.min(), garmin_df.weight.max()
-    height_min, height_max = garmin_df.height.min(), garmin_df.height.max()
-    age_min, age_max = garmin_df.age.min(), garmin_df.age.max()
+    drop_type_options = garmin_df['drop_type'].unique().tolist()
+    weight_min, weight_max = int(garmin_df.weight.min()), int(garmin_df.weight.max())
+    height_min, height_max = int(garmin_df.height.min()), int(garmin_df.height.max())
+    age_min, age_max = int(garmin_df.age.min()), int(garmin_df.age.max())
         
     # top-level filters
     
@@ -278,13 +279,14 @@ def input_page(garmin_df):
             default=[])
         
     selected_rank = []
+    selected_drop_type = []
     selected_weight_range = []
     selected_height_range = []
     selected_age_range = []
     
     if subject_selection_type == 'attribute':
         st.subheader("Select Subject(s) Attributes")
-        col1, col2, col3, col4 = st.columns(spec=[1, 3, 3, 3], gap='large')
+        col1, col2, col3, col4, col5 = st.columns(spec=[1, 3, 3, 3, 1], gap='large')
         # add radio selector for gender
         selected_rank = col1.multiselect(
             "Select military rank",
@@ -292,6 +294,7 @@ def input_page(garmin_df):
             key='subject rank',
             # index=session.get('selected_rank', 0)
             )
+        selected_rank = selected_rank if selected_rank else rank_options
 
         # add sliders for weight, height, age
         selected_age_range = col2.slider(
@@ -318,6 +321,13 @@ def input_page(garmin_df):
             value=session.get('selected_height_range', (height_min, height_max)),
             step=1,
             key='subject height')
+        
+        selected_drop_type = col5.multiselect(
+            "Select drop type",
+            options=drop_type_options,
+            key='drop type',
+            )
+        selected_drop_type = selected_drop_type if selected_drop_type else drop_type_options
             
             
     # Selecting the control group
@@ -336,13 +346,14 @@ def input_page(garmin_df):
             default=[])
         
     selected_rank_control = []
+    selected_drop_type_control = []
     selected_weight_range_control = []
     selected_height_range_control = []
     selected_age_range_control = []
     
     if control_selection_type == 'attribute':
         st.subheader("Select Control Group Attributes")
-        col1, col2, col3, col4 = st.columns(spec=[1, 3, 3, 3], gap='large')
+        col1, col2, col3, col4, col5 = st.columns(spec=[1, 3, 3, 3, 1], gap='large')
         # add radio selector for gender
         selected_rank_control = col1.multiselect(
             "Select military rank",
@@ -350,6 +361,7 @@ def input_page(garmin_df):
             key='control military rank',
             # index=session.get('selected_rank_control', 0)
             )
+        selected_rank_control = selected_rank_control if selected_rank_control else rank_options
 
         # add sliders for weight, height, age
         selected_age_range_control = col2.slider(
@@ -375,6 +387,14 @@ def input_page(garmin_df):
             value=session.get('selected_height_range_control', (height_min, height_max)),
             step=1,
             key='control height')
+        
+        selected_drop_type_control = col5.multiselect(
+            "Select drop type",
+            options=drop_type_options,
+            key='control drop type',
+            # index=session.get('selected_rank_control', 0)
+            )
+        selected_drop_type_control = selected_drop_type_control if selected_drop_type_control else drop_type_options
 
 
     st.header("Visualization/Analysis Configuration")
@@ -406,8 +426,10 @@ def input_page(garmin_df):
         session["real_time_update"] = real_time_update
         session['subject_selection_type'] = 0 if subject_selection_type == 'id' else 1
         session['control_selection_type'] = 0 if control_selection_type == 'all' else 1 if control_selection_type == 'id' else 2
-        session['selected_rank'] = 0 if selected_rank == rank_options[0] else 1
-        session['selected_rank_control'] = 0 if selected_rank == rank_options[0] else 1
+        session['selected_rank'] = selected_rank
+        session['selected_rank_control'] = selected_rank_control
+        session['selected_drop_type'] = selected_drop_type
+        session['selected_drop_type_control'] = selected_drop_type_control
         session['selected_age_range'] = selected_age_range
         session['selected_age_range_control'] = selected_age_range_control
         session['selected_weight_range'] = selected_weight_range
@@ -420,7 +442,7 @@ def input_page(garmin_df):
         if subject_selection_type == 'id':
             subjects_df = garmin_df.query('user_id in @selected_users')
         else:
-            subjects_df = garmin_df.query('rank == @selected_rank and weight >= @selected_weight_range[0] and weight <= @selected_weight_range[1] and height >= @selected_height_range[0] and height <= @selected_height_range[1] and age >= @selected_age_range[0] and age <= @selected_age_range[1]')
+            subjects_df = garmin_df.query('rank == @selected_rank and drop_type == @selected_drop_type and weight >= @selected_weight_range[0] and weight <= @selected_weight_range[1] and height >= @selected_height_range[0] and height <= @selected_height_range[1] and age >= @selected_age_range[0] and age <= @selected_age_range[1]')
             
         # Filter the dataframe based on the selected criteria for control group
         if control_selection_type == 'all':
@@ -428,7 +450,7 @@ def input_page(garmin_df):
         elif control_selection_type == 'id':
             control_df = garmin_df.query('user_id in @selected_users_control')
         else:
-            control_df = garmin_df.query('rank == @selected_rank_control and weight >= @selected_weight_range_control[0] and weight <= @selected_weight_range_control[1] and height >= @selected_height_range_control[0] and height <= @selected_height_range_control[1] and age >= @selected_age_range_control[0] and age <= @selected_age_range_control[1]')
+            control_df = garmin_df.query('rank == @selected_rank_control and drop_type == @selected_drop_type_control and weight >= @selected_weight_range_control[0] and weight <= @selected_weight_range_control[1] and height >= @selected_height_range_control[0] and height <= @selected_height_range_control[1] and age >= @selected_age_range_control[0] and age <= @selected_age_range_control[1]')
         
         # Store the filtered dataframe in session state
         session["subjects_df"] = subjects_df
@@ -778,6 +800,7 @@ def main():
 
     if session.get("page", "input") == "input":
         garmin_df = get_garmin_df(get_db_engine())
+        garmin_df.age = garmin_df.age.astype(int)
         garmin_df.weight = garmin_df.weight.astype(int)
         garmin_df.height = garmin_df.height.astype(int)
         input_page(garmin_df)

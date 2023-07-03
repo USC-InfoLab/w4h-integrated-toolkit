@@ -65,12 +65,13 @@ def get_garmin_df(db_conn, pattern=None):
 
 
 def calculate_mets(cal_df, user_weights=None):
-    if not user_weights:
-        user_weights = dict(zip(cal_df.user_id.unique(), np.ones(cal_df.user_id.nunique()) * 70))
-    mets_df = cal_df.copy()
-    mets_df['value'] = mets_df.apply(lambda x: x['value'] / (user_weights[x['user_id']] * 0.25), axis=1)
+    # if not user_weights:
+    #     user_weights = dict(zip(cal_df.user_id.unique(), np.ones(cal_df.user_id.nunique()) * 70))
+    # mets_df = cal_df.copy()
+    # mets_df['value'] = mets_df.apply(lambda x: x['value'] / (user_weights[x['user_id']] * 0.25), axis=1)
 
-    return mets_df
+    # return mets_df
+    return pd.DataFrame(columns=['user_id', 'timestamp', 'value'])
 
 
 
@@ -90,16 +91,18 @@ SERVER_URL = f"http://{HOST}:{PORT}"
 def get_data() -> pd.DataFrame:
     response = requests.get(SERVER_URL)
     data = response.json()
-    df_hrate = pd.DataFrame(data['heart_rates'])
-    df_calories = pd.DataFrame(data['calories'])
-    df_coords = pd.DataFrame(data['coordinates'])
+    df_hrate = pd.DataFrame(data)
+    # df_hrate = pd.DataFrame(data['heart_rates'])
+    # df_calories = pd.DataFrame(data['calories'])
+    # df_coords = pd.DataFrame(data['coordinates'])
     df_hrate['timestamp'] = pd.to_datetime(df_hrate['timestamp'])
-    df_calories['timestamp'] = pd.to_datetime(df_calories['timestamp'])
-    df_coords['timestamp'] = pd.to_datetime(df_coords['timestamp'])
+    # df_calories['timestamp'] = pd.to_datetime(df_calories['timestamp'])
+    # df_coords['timestamp'] = pd.to_datetime(df_coords['timestamp'])
     df_hrate = df_hrate.set_index('timestamp')
-    df_calories = df_calories.set_index('timestamp')
-    df_coords = df_coords.set_index('timestamp')
-    return df_hrate, df_calories, df_coords
+    # df_calories = df_calories.set_index('timestamp')
+    # df_coords = df_coords.set_index('timestamp')
+    # return df_hrate, df_calories, df_coords
+    return df_hrate, pd.DataFrame(columns=['user_id', 'timestamp', 'value']), pd.DataFrame(columns=['user_id', 'timestamp', 'value'])
 
 
 def post_message_to_slack(text, blocks = None):

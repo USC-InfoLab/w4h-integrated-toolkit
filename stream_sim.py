@@ -7,6 +7,7 @@ import urllib.parse
 from conf import *
 from utils import Singleton
 
+data_loader_inited = False
 
 app = Flask(__name__)
         
@@ -164,24 +165,30 @@ def get_data(config):
         return df 
 
 
-def init_dataloader():
+def init_dataloader(inited=False):
     """
     Initializes the DataLoader with the fetched data based on the configuration.
+    
+    Args:
+        inited (bool, optional): Whether the DataLoader has already been initialized. Defaults to False.
 
     Returns:
         DataLoader: Initialized DataLoader instance.
     """
-    config = {
-        'DATA_TYPE': DATA_TYPE,
-        'DATASET': DATASET,
-        'IDS': get_ids(),
-        'START_TIME': START_TIME,
-        'DB_TABLE': DB_TABLE,
-        'DATE_TIME_COL': DATE_TIME_COL
-    }
-
-    data = get_data(config)
-    return DataLoader(data, batch_size=BATCH)
+    if not inited:
+        config = {
+            'DATA_TYPE': DATA_TYPE,
+            'DATASET': DATASET,
+            'IDS': get_ids(),
+            'START_TIME': START_TIME,
+            'DB_TABLE': DB_TABLE,
+            'DATE_TIME_COL': DATE_TIME_COL
+        }
+        data = get_data(config)
+        data_loader_inited = True
+        return DataLoader(data, batch_size=BATCH)
+    else:
+        return DataLoader()
 
 
 def get_ids():
@@ -215,7 +222,10 @@ def fetch_sensor_data():
     Returns:
         Response: A JSON response containing the fetched sensor data.
     """
-    data_loader = init_dataloader()
+    global data_loader_inited
+    
+    data_loader = init_dataloader(inited=data_loader_inited)
+    data_loader_inited = True
     rows = data_loader.get_next()
     rows_with_strftime = rows.copy()
     rows_dict = rows_with_strftime.to_dict('records')

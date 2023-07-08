@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import streamlit as st
+import streamlit_ext as ste
 from datetime import datetime, date, timedelta
 from datetime import time as dt_time
 import plotly.express as px
@@ -473,20 +474,27 @@ def input_page(garmin_df):
             (dt_time(12, 30), dt_time(16, 0)),
             (dt_time(20, 0), dt_time(4, 45))
         ]
+        def_time_ranges_labels = ['Workout #1', 'Workout #2', 'Sleep Schedule']
         time_ranges = session.get('time_ranges', def_time_ranges)
+        time_ranges_labels = session.get('time_ranges_labels', def_time_ranges_labels)
         if num_time_ranges > 0:
             with st.expander(f"###### Time Ranges"):
                 updated_ranges = []
+                updated_range_labels = []
                 for i in range(num_time_ranges):
                     # 2 columns for each time range
-                    col1, col2 = st.columns(2)
+                    col1, col2, col3 = st.columns(spec=[1, 2, 2])
                     with col1:
-                        range_start = st.time_input(f"Start time for range {i+1}", value=(time_ranges[i][0] if i < len(time_ranges) else dt_time(0, 0)))
+                        range_label = st.text_input(f"Label for range {i+1}", value=(time_ranges_labels[i] if i < len(time_ranges_labels) else f"Time range {i+1}"))
                     with col2:
+                        range_start = st.time_input(f"Start time for range {i+1}", value=(time_ranges[i][0] if i < len(time_ranges) else dt_time(0, 0)))
+                    with col3:
                         range_end = st.time_input(f"End time for range {i+1}", value=(time_ranges[i][1] if i < len(time_ranges) else dt_time(0, 0)))
                     updated_ranges.append((range_start, range_end))
+                    updated_range_labels.append(range_label)
                     # st.divider()
                 time_ranges = updated_ranges
+                time_ranges_labels = updated_range_labels
     else:
         st.info("Real-Time update is enabled. Start/End dates for querying are disabled.")
 
@@ -506,6 +514,7 @@ def input_page(garmin_df):
             session['end_date'] = end_date
             session['num_time_ranges'] = num_time_ranges
             session['time_ranges'] = time_ranges
+            session['time_ranges_labels'] = time_ranges_labels
         elif real_time_update:
             session['timeout'] = TIMEOUT
         session["window_size"] = window_size if real_time_update else DEFAULT_WINDOW_SIZE
@@ -885,9 +894,11 @@ def results_page():
                 st.title("Analysis of Selected Time Ranges")
                 num_time_ranges = session.get('num_time_ranges')
                 time_ranges = session.get('time_ranges')
+                time_ranges_labels = session.get('time_ranges_labels')
                 for i in range(num_time_ranges):
                     range_start, range_end = time_ranges[i]
-                    with st.expander(f'##### Time Range {i+1}: {range_start} to {range_end}', expanded=False):
+                    range_label = time_ranges_labels[i]
+                    with st.expander(f'##### {range_label}: {range_start} to {range_end}', expanded=False):
                         # Get data for time range
                         time_range_hrate_df = df_hrate_full.loc[range_start:range_end]
                         
@@ -960,11 +971,52 @@ def results_page():
                             fig_bar3 = get_bar_fig(df_range_hrate_max_comp, label='Maximum Heart Rate')
                             # Display chart in Streamlit
                             st.plotly_chart(fig_bar3, use_container_width=False)
+            
+            # Show the dataframes and export to csv if needed
+            st.title("Show/Export Data")
+            with st.expander('Click to view more', expanded=False):
+                st.header("Heart-Rate Data")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.subheader("Full Heart Rate Data")
+                    st.dataframe(df_hrate_full)
+                    ste.download_button(
+                        "Press to Download CSV",
+                        df_hrate_full.to_csv().encode('utf-8'),
+                        "df_hrate_full.csv",
+                        "text/csv"
+                    )
+                with col2:
+                    st.subheader("Selected Subject(s) Heart Rate Data")
+                    st.dataframe(df_hrate)
+                    ste.download_button(
+                        "Press to Download CSV",
+                        df_hrate.to_csv().encode('utf-8'),
+                        "df_hrate_subjects.csv",
+                        "text/csv"
+                    )
+                with col3:
+                    df_hrate_control = df_hrate_full.loc[df_hrate_full['user_id'].isin(control_ids)]
+                    st.subheader("Control Group Heart Rate Data")
+                    st.dataframe(df_hrate_control)
+                    ste.download_button(
+                        "Press to Download CSV",
+                        df_hrate_control.to_csv().encode('utf-8'),
+                        "df_hrate_control.csv",
+                        "text/csv"
+                    )
+                    
+                
+            
                         
                         
                 
             
         if not real_time_update:
+            # reset dataframes
+            st.session_state['df_hrate_full'] = pd.DataFrame()
+            st.session_state['df_calories_full'] = pd.DataFrame()
+            st.session_state['df_coords_full'] = pd.DataFrame()
             break
         time.sleep(session.get("timeout", TIMEOUT))
 

@@ -1,5 +1,5 @@
 import pandas as pd
-from flask import Flask, jsonify, redirect, url_for
+from flask import Flask, jsonify, redirect, url_for, request
 from sqlalchemy import create_engine
 from loguru import logger
 import urllib.parse
@@ -56,6 +56,20 @@ class DataLoader(metaclass=Singleton):
         if self.row_ind >= len(self.df):
             self.row_ind = 0
         return res
+    
+    
+    def init_start_stream_index(self, start_time):
+        """Initialize the row index to start streaming from.
+
+        Args:
+            start_time (str): The time to start streaming from.
+        """
+        if start_time is None:
+            return self.df.iloc[self.row_ind].timestamp
+        start_time = pd.Timestamp(start_time, tz='UTC')
+        start_time_ind = self.df[self.df.timestamp < start_time].index.max() + 1
+        self.row_ind = start_time_ind
+        return self.df.iloc[start_time_ind].timestamp
         
             
 
@@ -212,6 +226,27 @@ def root():
         Response: A redirection response to the 'fetch_sensor_data' endpoint.
     """
     return redirect(url_for('fetch_sensor_data'))
+
+
+@app.route('/init_stream', methods=['GET'])
+def init_stream():
+    """
+    Initializes the start time from which to fetch the sensor data.
+
+    Args:
+        start_time: Start time from which to fetch the sensor data. Defaults to None.
+
+    Returns:
+        Response: A JSON response containing the initialized start time.
+    """
+    global data_loader_inited
+
+    requested_start = request.args.get('start_time', None)
+    data_loader = init_dataloader(inited=data_loader_inited)
+    inited_start_time = data_loader.init_start_stream_index(requested_start)
+    resp = jsonify({'start_time': inited_start_time})
+    logger.debug(resp)
+    return resp
 
 
 @app.route(f'/{URL_PATH}')

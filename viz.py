@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 from datetime import datetime, date, timedelta
+from datetime import time as dt_time
 import plotly.express as px
 import plotly.graph_objs as go
+from plotly.subplots import make_subplots
 import time
 import random, hashlib
 from sqlalchemy import create_engine, select
@@ -87,21 +89,31 @@ st.set_page_config(
 # Flask server API endpoint
 SERVER_URL = f"http://{HOST}:{PORT}"
 
-# read data from Flask server
-def get_data() -> pd.DataFrame:
-    response = requests.get(SERVER_URL)
-    data = response.json()
-    df_hrate = pd.DataFrame(data)
-    # df_hrate = pd.DataFrame(data['heart_rates'])
-    # df_calories = pd.DataFrame(data['calories'])
-    # df_coords = pd.DataFrame(data['coordinates'])
+# read data from Flask server (real-time) or from database (historical)
+def get_data(session=None, real_time=False) -> pd.DataFrame:
+    if real_time:
+        response = requests.get(SERVER_URL)
+        data = response.json()
+        df_hrate = pd.DataFrame(data)
+        # df_hrate = pd.DataFrame(data['heart_rates'])
+        # df_calories = pd.DataFrame(data['calories'])
+        # df_coords = pd.DataFrame(data['coordinates'])
+        # df_hrate['timestamp'] = pd.to_datetime(df_hrate['timestamp'])
+        # df_calories['timestamp'] = pd.to_datetime(df_calories['timestamp'])
+        # df_coords['timestamp'] = pd.to_datetime(df_coords['timestamp'])
+        # df_hrate = df_hrate.set_index('timestamp')
+        # df_calories = df_calories.set_index('timestamp')
+        # df_coords = df_coords.set_index('timestamp')
+        # return df_hrate, df_calories, df_coords
+    else:
+        start_date = session.get('start_date')
+        end_date = session.get('end_date')
+        db_conn = get_db_engine()
+        df_hrate = pd.read_sql(f"SELECT * FROM {DB_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)", db_conn, params=[start_date, end_date])
+        df_hrate.sort_values(by=['timestamp'], inplace=True)
+        
     df_hrate['timestamp'] = pd.to_datetime(df_hrate['timestamp'])
-    # df_calories['timestamp'] = pd.to_datetime(df_calories['timestamp'])
-    # df_coords['timestamp'] = pd.to_datetime(df_coords['timestamp'])
     df_hrate = df_hrate.set_index('timestamp')
-    # df_calories = df_calories.set_index('timestamp')
-    # df_coords = df_coords.set_index('timestamp')
-    # return df_hrate, df_calories, df_coords
     return df_hrate, pd.DataFrame(columns=['user_id', 'timestamp', 'value']), pd.DataFrame(columns=['user_id', 'timestamp', 'value'])
 
 
@@ -130,17 +142,18 @@ def get_control_stats(df_hrate_all, df_calories_all, df_mets_all, control_ids):
     return stats
 
 
-def add_aux_rectangles(fig, df, df_full, window_start, window_end):
-    fig.add_shape(
-        type='rect',
-        xref='x', yref='paper',
-        x0=window_start, y0=0,
-        x1=window_end, y1=1,
-        fillcolor='blue',
-        opacity=0.1,
-        layer='below',
-        line_width=0
-    )
+def add_aux_rectangles(fig, df, df_full, window_start, window_end, real_time=False):
+    if real_time:
+        fig.add_shape(
+            type='rect',
+            xref='x', yref='paper',
+            x0=window_start, y0=0,
+            x1=window_end, y1=1,
+            fillcolor='blue',
+            opacity=0.1,
+            layer='below',
+            line_width=0
+        )
 
     # calculate the avg and std of the feature. Define safe range as +-2 std away from the mean
     avg_val = df_full.value.mean()
@@ -159,21 +172,56 @@ def add_aux_rectangles(fig, df, df_full, window_start, window_end):
         line_width=0
     )
 
-    for user_id, group in df.groupby('user_id'):
-        unsafe_values = group[(group['value'] < safe_min) | (group['value'] > safe_max)]
-        if not unsafe_values.empty:
+    # for user_id, group in df.groupby('user_id'):
+    #     unsafe_values = group[(group['value'] < safe_min) | (group['value'] > safe_max)]
+    #     if not unsafe_values.empty:
 
-            for i, unsafe_value in unsafe_values.iterrows():
-                    fig.add_shape(
+    #         for i, unsafe_value in unsafe_values.iterrows():
+    #                 fig.add_shape(
+    #                     type='rect',
+    #                     xref='x', yref='paper',
+    #                     x0=i - timedelta(seconds=30), y0=0,
+    #                     x1=i + timedelta(seconds=30), y1=1,
+    #                     fillcolor='red',
+    #                     opacity=0.3,
+    #                     layer='below',
+    #                     line_width=0
+    #                 )
+    # unsafe_values = df[(df['value'] < safe_min) | (df['value'] > safe_max)]
+    # if not unsafe_values.empty:
+    #     for i, unsafe_value in unsafe_values.iterrows():
+    #             fig.add_shape(
+    #                 type='rect',
+    #                 xref='x', yref='paper',
+    #                 x0=i - timedelta(seconds=30), y0=0,
+    #                 x1=i + timedelta(seconds=30), y1=1,
+    #                 fillcolor='red',
+    #                 opacity=0.3,
+    #                 layer='below',
+    #                 line_width=0
+    #             )
+    unsafe_values = df[(df['value'] < safe_min) | (df['value'] > safe_max)]
+    # Set the number of windows and calculate the window size
+    check_window_num = 600
+    date_range = df.index[-1] - df.index[0]
+    unsafe_check_window_size = date_range / check_window_num
+    unsafe_check_window_start = df.index[0]
+    if not unsafe_values.empty:
+        while unsafe_check_window_start < unsafe_values.index[-1]:
+            num_unsafe_vals = unsafe_values[(unsafe_values.index >= unsafe_check_window_start) & (unsafe_values.index < unsafe_check_window_start + unsafe_check_window_size)].shape[0]
+            num_all_vals = df[(df.index >= unsafe_check_window_start) & (df.index < unsafe_check_window_start + unsafe_check_window_size)].shape[0]
+            if num_unsafe_vals > 0:
+                fig.add_shape(
                         type='rect',
                         xref='x', yref='paper',
-                        x0=i - timedelta(seconds=10), y0=0,
-                        x1=i + timedelta(seconds=10), y1=1,
+                        x0=unsafe_check_window_start, y0=0,
+                        x1=unsafe_check_window_start + unsafe_check_window_size, y1=1,
                         fillcolor='red',
-                        opacity=0.2,
+                        opacity=0.7*(num_unsafe_vals / num_all_vals) + 0.2,
                         layer='below',
                         line_width=0
                     )
+            unsafe_check_window_start += unsafe_check_window_size
 
 
 def get_bar_fig(df, label='Feature'):
@@ -276,7 +324,7 @@ def input_page(garmin_df):
         selected_users = st.multiselect(
             "Select Subject ID(s)",
             options=user_ids,
-            default=[])
+            default=session.get('selected_users', []))
         
     selected_rank = []
     selected_drop_type = []
@@ -293,6 +341,7 @@ def input_page(garmin_df):
             options=rank_options,
             key='subject rank',
             # index=session.get('selected_rank', 0)
+            default=session.get('selected_rank', [])
             )
         selected_rank = selected_rank if selected_rank else rank_options
 
@@ -326,6 +375,7 @@ def input_page(garmin_df):
             "Select drop type",
             options=drop_type_options,
             key='drop type',
+            default=session.get('selected_drop_type', [])
             )
         selected_drop_type = selected_drop_type if selected_drop_type else drop_type_options
             
@@ -343,7 +393,8 @@ def input_page(garmin_df):
         selected_users_control = st.multiselect(
             "Select Control Target ID(s)",
             options=user_ids,
-            default=[])
+            default=session.get('selected_users_control', [])
+        )
         
     selected_rank_control = []
     selected_drop_type_control = []
@@ -360,6 +411,7 @@ def input_page(garmin_df):
             options=rank_options,
             key='control military rank',
             # index=session.get('selected_rank_control', 0)
+            default=session.get('selected_rank_control', [])
             )
         selected_rank_control = selected_rank_control if selected_rank_control else rank_options
 
@@ -393,28 +445,54 @@ def input_page(garmin_df):
             options=drop_type_options,
             key='control drop type',
             # index=session.get('selected_rank_control', 0)
+            default=session.get('selected_drop_type_control', [])
             )
         selected_drop_type_control = selected_drop_type_control if selected_drop_type_control else drop_type_options
 
 
     st.header("Visualization/Analysis Configuration")
 
-    real_time_update = st.checkbox("Real-Time update?", value=True)
+    real_time_update = st.checkbox("Real-Time stream simulation?", value=session.get("real_time_update", False))
 
     if not real_time_update:
         start_date = st.date_input(
         "Start date",
-        datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+        session.get("start_date", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+        )
         
         end_date = st.date_input(
         "End date",
-        datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S'))
+        session.get("end_date", datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S'))
+        )
+        
+        st.markdown("#### Need to analyze specific time range? Select how many range(s) you want to analyze.")
+        num_time_ranges = st.selectbox("Select how many time range(s) you want to analyze", range(0, 10), 
+                                       index=session.get('num_time_ranges', 3))
+        def_time_ranges =[
+            (dt_time(6, 45), dt_time(9, 30)),
+            (dt_time(12, 30), dt_time(16, 0)),
+            (dt_time(20, 0), dt_time(4, 45))
+        ]
+        time_ranges = session.get('time_ranges', def_time_ranges)
+        if num_time_ranges > 0:
+            with st.expander(f"###### Time Ranges"):
+                updated_ranges = []
+                for i in range(num_time_ranges):
+                    # 2 columns for each time range
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        range_start = st.time_input(f"Start time for range {i+1}", value=(time_ranges[i][0] if i < len(time_ranges) else dt_time(0, 0)))
+                    with col2:
+                        range_end = st.time_input(f"End time for range {i+1}", value=(time_ranges[i][1] if i < len(time_ranges) else dt_time(0, 0)))
+                    updated_ranges.append((range_start, range_end))
+                    # st.divider()
+                time_ranges = updated_ranges
     else:
         st.info("Real-Time update is enabled. Start/End dates for querying are disabled.")
 
-    window_size = st.number_input('Window Size (seconds)', value=session.get("window_size", DEFAULT_WINDOW_SIZE), step=15)
     if real_time_update:
-        TIMEOUT = st.number_input('Fast Forward (Every 15s Equals)', value=float(TIMEOUT), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
+        window_size = st.number_input('Window Size (seconds)', value=session.get("window_size", DEFAULT_WINDOW_SIZE), step=15)
+        TIMEOUT = st.number_input('Fast Forward (Every 15s Equals)', value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
     
 
         
@@ -422,7 +500,15 @@ def input_page(garmin_df):
     if st.button("Show Results"):
         
         # save input values to the session state
-        session["window_size"] = window_size
+        session['real_time_update'] = real_time_update
+        if not real_time_update:
+            session['start_date'] = start_date
+            session['end_date'] = end_date
+            session['num_time_ranges'] = num_time_ranges
+            session['time_ranges'] = time_ranges
+        elif real_time_update:
+            session['timeout'] = TIMEOUT
+        session["window_size"] = window_size if real_time_update else DEFAULT_WINDOW_SIZE
         session["real_time_update"] = real_time_update
         session['subject_selection_type'] = 0 if subject_selection_type == 'id' else 1
         session['control_selection_type'] = 0 if control_selection_type == 'all' else 1 if control_selection_type == 'id' else 2
@@ -436,6 +522,9 @@ def input_page(garmin_df):
         session['selected_weight_range_control'] = selected_weight_range_control
         session['selected_height_range'] = selected_height_range
         session['selected_height_range_control'] = selected_height_range_control
+        session['selected_users'] = selected_users if subject_selection_type == 'id' else []
+        session['selected_users_control'] = selected_users_control if control_selection_type == 'id' else []
+
         
         
         # Filter the dataframe based on the selected criteria for subjects
@@ -466,7 +555,7 @@ def results_page():
     # Get the session state
     session = st.session_state
     if session is None:
-        st.error("Please run the app first.")
+        st.error("Please use the inputs page first.")
         return
     
    
@@ -531,14 +620,16 @@ def results_page():
         if len(subject_ids) == 0:
             placeholder.info("Query resulted in no subjects! Select the subjects again.")
             break
+        elif len(control_ids) == 0:
+            placeholder.info("Query resulted in no control subjects! Select the control subjects again.")
         user_trajectories = {}
         df_hrate_full = st.session_state['df_hrate_full']
         df_calories_full = st.session_state['df_calories_full']
         df_coords_full = st.session_state['df_coords_full']
-        new_hrates, new_calories, new_coords = get_data()  
-        df_hrate_full = pd.concat([df_hrate_full, new_hrates])
-        df_calories_full = pd.concat([df_calories_full, new_calories])
-        df_coords_full = pd.concat([df_coords_full, new_coords])
+        new_hrates, new_calories, new_coords = get_data(session=session, real_time=real_time_update)  
+        df_hrate_full = pd.concat([df_hrate_full, new_hrates]) if real_time_update else new_hrates
+        df_calories_full = pd.concat([df_calories_full, new_calories]) if real_time_update else new_calories
+        df_coords_full = pd.concat([df_coords_full, new_coords]) if real_time_update else new_coords
         st.session_state['df_hrate_full'] = df_hrate_full
         st.session_state['df_calories_full'] = df_calories_full
         st.session_state['df_coords_full'] = df_coords_full
@@ -566,33 +657,35 @@ def results_page():
         avg_mets = df_mets['value'].mean()
         
         # getting window records
-        window_end_time = df_hrate.index[-1]
-        window_start_time = df_hrate.index[-1] - timedelta(seconds=window_size)
+        window_end_time = df_hrate.index[-1] if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.now(), tz='UTC')
+        window_start_time = (df_hrate.index[-1] - timedelta(seconds=window_size)) if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.now(), tz='UTC')
         
-        window_hrate_df = df_hrate.loc[df_hrate.index >= window_start_time]
-        window_calories_df = df_calories.loc[df_calories.index >= window_start_time]
-        window_mets_df = df_mets.loc[df_mets.index >= window_start_time]
-        
-        avg_win_heart_rate = window_hrate_df['value'].mean()
-        min_win_heart_rate = window_hrate_df['value'].min()
-        max_win_heart_rate = window_hrate_df['value'].max()
+        if real_time_update:
+            window_hrate_df = df_hrate.loc[df_hrate.index >= window_start_time]
+            window_calories_df = df_calories.loc[df_calories.index >= window_start_time]
+            window_mets_df = df_mets.loc[df_mets.index >= window_start_time]
+            
+            avg_win_heart_rate = window_hrate_df['value'].mean()
+            min_win_heart_rate = window_hrate_df['value'].min()
+            max_win_heart_rate = window_hrate_df['value'].max()
 
-        avg_win_calories = window_calories_df['value'].mean()
-        min_win_calories = window_calories_df['value'].min()
-        max_win_calories = window_calories_df['value'].max()
-        avg_win_calories = window_calories_df['value'].mean()
+            avg_win_calories = window_calories_df['value'].mean()
+            min_win_calories = window_calories_df['value'].min()
+            max_win_calories = window_calories_df['value'].max()
+            avg_win_calories = window_calories_df['value'].mean()
 
-        avg_win_mets = window_mets_df['value'].mean()
-        min_win_mets = window_mets_df['value'].min()
-        max_win_mets = window_mets_df['value'].max()
-        avg_win_mets = window_mets_df['value'].mean()
+            avg_win_mets = window_mets_df['value'].mean()
+            min_win_mets = window_mets_df['value'].min()
+            max_win_mets = window_mets_df['value'].max()
+            avg_win_mets = window_mets_df['value'].mean()
         
         # get control group statistics
         control_stats = get_control_stats(df_hrate_full, df_calories_full, df_mets_full, control_ids=control_ids)
-        win_control_stats = get_control_stats(df_hrate_full.loc[df_hrate_full.index>=window_start_time], 
-                                        df_calories_full.loc[df_calories_full.index>=window_start_time], 
-                                        df_mets_full.loc[df_mets_full.index>=window_start_time],
-                                        control_ids=control_ids)
+        if real_time_update:
+            win_control_stats = get_control_stats(df_hrate_full.loc[df_hrate_full.index>=window_start_time], 
+                                            df_calories_full.loc[df_calories_full.index>=window_start_time], 
+                                            df_mets_full.loc[df_mets_full.index>=window_start_time],
+                                            control_ids=control_ids)
         
         # Add new data to user trajectories
         for user_id in df_coords["user_id"].unique():
@@ -626,11 +719,15 @@ def results_page():
             kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
 
             # fill in those three columns with respective metrics or KPIs
-            kpi1.metric(
-                label="Average Heart-Rate",
-                value=round(avg_heart_rate),
-                delta=round(avg_heart_rate - control_stats['heart_rate']['avg']),
-            )
+            try:
+                kpi1.metric(
+                    label="Average Heart-Rate",
+                    value=round(avg_heart_rate),
+                    delta=round(avg_heart_rate - control_stats['heart_rate']['avg']),
+                )
+            except:
+                st.error("No data available for heart rate")
+                break
             
             kpi2.metric(
                 label="Min Heart-Rate",
@@ -656,41 +753,42 @@ def results_page():
                 delta=round(avg_mets - control_stats['mets']['avg'], 2),
             )
             
-            st.markdown("#### Selected Window")
-            
-            wkpi1, wkpi2, wkpi3, wkpi4, wkpi5 = st.columns(5)
+            if real_time_update:
+                st.markdown("#### Selected Window")
+                
+                wkpi1, wkpi2, wkpi3, wkpi4, wkpi5 = st.columns(5)
 
-            # fill in those three columns with respective metrics or KPIs
-            wkpi1.metric(
-                label="Average Window Heart-Rate",
-                value=round(avg_win_heart_rate),
-                delta=round(avg_win_heart_rate - control_stats['heart_rate']['avg']),
-            )
-            
-            wkpi2.metric(
-                label="Minimum Window Heart-Rate",
-                value=round(min_win_heart_rate, 2),
-                delta= round(min_win_heart_rate - control_stats['heart_rate']['avg']),
-            )
-            
-            
-            wkpi3.metric(
-                label="Max Window Heart-Rate",
-                value=round(max_win_heart_rate,2),
-                delta=round(max_win_heart_rate - control_stats['heart_rate']['avg']),
-            )
+                # fill in those three columns with respective metrics or KPIs
+                wkpi1.metric(
+                    label="Average Window Heart-Rate",
+                    value=round(avg_win_heart_rate),
+                    delta=round(avg_win_heart_rate - control_stats['heart_rate']['avg']),
+                )
+                
+                wkpi2.metric(
+                    label="Minimum Window Heart-Rate",
+                    value=round(min_win_heart_rate, 2),
+                    delta= round(min_win_heart_rate - control_stats['heart_rate']['avg']),
+                )
+                
+                
+                wkpi3.metric(
+                    label="Max Window Heart-Rate",
+                    value=round(max_win_heart_rate,2),
+                    delta=round(max_win_heart_rate - control_stats['heart_rate']['avg']),
+                )
 
-            wkpi4.metric(
-                label="Avg Calories Burned in Last Window",
-                value=round(avg_win_calories, 2),
-                delta=round(avg_win_calories - control_stats['calories']['avg'], 2),
-            )
+                wkpi4.metric(
+                    label="Avg Calories Burned in Last Window",
+                    value=round(avg_win_calories, 2),
+                    delta=round(avg_win_calories - control_stats['calories']['avg'], 2),
+                )
 
-            wkpi5.metric(
-                label='Total METs in Last Window',
-                value=round(avg_win_mets, 2),
-                delta=round(avg_win_mets - control_stats['mets']['avg'], 2),
-            )
+                wkpi5.metric(
+                    label='Total METs in Last Window',
+                    value=round(avg_win_mets, 2),
+                    delta=round(avg_win_mets - control_stats['mets']['avg'], 2),
+                )
 
             # create heart-rates chart
             fig_hrate = go.Figure()
@@ -699,19 +797,20 @@ def results_page():
 
             
             grouped_df_hrate = df_hrate.groupby('user_id')
-
+            
             for user_id, group in grouped_df_hrate:
                 fig_hrate.add_scattergl(x=group.index, y=group['value'],
                                         name=f'user_id: {user_id}')
+                fig_hrate.update_traces(showlegend=True)
             fig_hrate.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
-            add_aux_rectangles(fig_hrate, df_hrate, df_hrate_full, window_start_time, window_end_time)
+            add_aux_rectangles(fig_hrate, df_hrate, df_hrate_full, window_start_time, window_end_time, real_time=real_time_update)
 
             # plot calories for each user
             grouped_df_calories = df_calories.groupby('user_id')
             for user_id, group in grouped_df_calories:
                 fig_calories.add_scattergl(x=group.index, y=group['value'], name=f'user_id: {user_id}')
             fig_calories.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
-            add_aux_rectangles(fig_calories, df_calories, df_calories_full, window_start_time, window_end_time)
+            # add_aux_rectangles(fig_calories, df_calories, df_calories_full, window_start_time, window_end_time, real_time=real_time_update)
 
             # plot mets for each user
             grouped_df_mets = df_mets.groupby('user_id')
@@ -720,15 +819,16 @@ def results_page():
             fig_mets.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
 
             
-            st.markdown("### Heart-Rate plot")
+            st.markdown("### Heart-Rate Plot")
             # st.write(fig_hrate)
             st.plotly_chart(fig_hrate, use_container_width=True)
-            st.markdown("### Calories plot")
-            # st.write(fig_calories)
-            st.plotly_chart(fig_calories, use_container_width=True)
-            st.markdown("### METs plot")
-            # st.write(fig_mets)
-            st.plotly_chart(fig_mets, use_container_width=True)
+            with st.expander("### Calories and METs Plots", expanded=False):
+                st.markdown("#### Calories plot")
+                # st.write(fig_calories)
+                st.plotly_chart(fig_calories, use_container_width=True)
+                st.markdown("#### METs plot")
+                # st.write(fig_mets)
+                st.plotly_chart(fig_mets, use_container_width=True)
             
             # st.line_chart(df['value'])
             # add barcharts to compare mean features to the global mean stats
@@ -779,11 +879,94 @@ def results_page():
                 fig_bar3 = get_bar_fig(df_mets_comp, label='METs')
                 # Display chart in Streamlit
                 st.plotly_chart(fig_bar3, use_container_width=False)
-
+                
+            if not real_time_update and session.get('num_time_ranges') > 0:
+                # add the charts for selected ranges
+                st.title("Analysis of Selected Time Ranges")
+                num_time_ranges = session.get('num_time_ranges')
+                time_ranges = session.get('time_ranges')
+                for i in range(num_time_ranges):
+                    range_start, range_end = time_ranges[i]
+                    with st.expander(f'##### Time Range {i+1}: {range_start} to {range_end}', expanded=False):
+                        # Get data for time range
+                        time_range_hrate_df = df_hrate_full.loc[range_start:range_end]
+                        
+                        # Filter data for subjects and control group
+                        subjects_range_hrate_df = time_range_hrate_df.loc[time_range_hrate_df['user_id'].isin(subject_ids)]
+                        control_range_hrate_df = time_range_hrate_df.loc[time_range_hrate_df['user_id'].isin(control_ids)]
+                        
+                        # get stats for time range for each group
+                        subjects_range_hrate_avg = subjects_range_hrate_df['value'].mean()
+                        subjects_range_hrate_min = subjects_range_hrate_df['value'].min()
+                        subjects_range_hrate_max = subjects_range_hrate_df['value'].max()
+                        
+                        control_range_hrate_avg = control_range_hrate_df['value'].mean()
+                        control_range_hrate_min = control_range_hrate_df['value'].min()
+                        control_range_hrate_max = control_range_hrate_df['value'].max()
+                        
+                        # visualize metrics in separate columns
+                        # create three columns
+                        kpi1, kpi2, kpi3 = st.columns(3)
+                        kpi1.metric(
+                            label=f"Average Heart-Rate in Time Range ({range_start} to {range_end})",
+                            value=round(subjects_range_hrate_avg),
+                            delta=round(subjects_range_hrate_avg - control_range_hrate_avg)
+                        )
+                        
+                        kpi2.metric(
+                            label=f"Minimum Heart-Rate in Time Range ({range_start} to {range_end})",
+                            value=round(subjects_range_hrate_min, 2),
+                            delta=round(subjects_range_hrate_min - control_range_hrate_min, 2)
+                        )
+                        
+                        kpi3.metric(
+                            label=f"Maximum Heart-Rate in Time Range ({range_start} to {range_end})",
+                            value=round(subjects_range_hrate_max, 2),
+                            delta=round(subjects_range_hrate_max - control_range_hrate_max, 2)
+                        )
+                        
+                        # visualize same metrics in bar charts
+                        range_hrate_avg_comp = {
+                            'Selected Subject(s) Average': [subjects_range_hrate_avg],
+                            'Control Group Average': [control_range_hrate_avg]
+                        }
+                        
+                        range_hrate_min_comp = {
+                            'Selected Subject(s) Minimum': [subjects_range_hrate_min],
+                            'Control Group Minimum': [control_range_hrate_min]
+                        }
+                        
+                        range_hrate_max_comp = {
+                            'Selected Subject(s) Maximum': [subjects_range_hrate_max],
+                            'Control Group Maximum': [control_range_hrate_max]
+                        }
+                        # create corresponding dataframes
+                        df_range_hrate_avg_comp = pd.DataFrame(range_hrate_avg_comp)
+                        df_range_hrate_min_comp = pd.DataFrame(range_hrate_min_comp)
+                        df_range_hrate_max_comp = pd.DataFrame(range_hrate_max_comp)
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.subheader('Average Heart Rate')
+                            fig_bar1 = get_bar_fig(df_range_hrate_avg_comp, label='Average Heart Rate')
+                            # Display chart in Streamlit
+                            st.plotly_chart(fig_bar1, use_container_width=False)
+                        with col2:
+                            st.subheader('Minimum Heart Rate')
+                            fig_bar2 = get_bar_fig(df_range_hrate_min_comp, label='Minimum Heart Rate')
+                            # Display chart in Streamlit
+                            st.plotly_chart(fig_bar2, use_container_width=False)
+                        with col3:
+                            st.subheader('Maximum Heart Rate')
+                            fig_bar3 = get_bar_fig(df_range_hrate_max_comp, label='Maximum Heart Rate')
+                            # Display chart in Streamlit
+                            st.plotly_chart(fig_bar3, use_container_width=False)
+                        
+                        
+                
             
-            if not real_time_update:
-                break
-            time.sleep(TIMEOUT)
+        if not real_time_update:
+            break
+        time.sleep(session.get("timeout", TIMEOUT))
 
 
 

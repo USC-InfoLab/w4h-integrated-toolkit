@@ -496,7 +496,17 @@ def input_page(garmin_df):
                 time_ranges = updated_ranges
                 time_ranges_labels = updated_range_labels
     else:
-        st.info("Real-Time update is enabled. Start/End dates for querying are disabled.")
+        col1, col2 = st.columns(2)
+        with col1:
+            stream_start_date = st.date_input(
+            "Start Date for Simulating Stream",
+            session.get("stream_start_date", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+            )
+        with col2:
+            stream_start_time = st.time_input(
+            "Start Time for Simulating Stream",
+            session.get("stream_start_time", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+            )
 
     if real_time_update:
         window_size = st.number_input('Window Size (seconds)', value=session.get("window_size", DEFAULT_WINDOW_SIZE), step=15)
@@ -516,6 +526,8 @@ def input_page(garmin_df):
             session['time_ranges'] = time_ranges
             session['time_ranges_labels'] = time_ranges_labels
         elif real_time_update:
+            session['stream_start_date'] = stream_start_date
+            session['stream_start_time'] = stream_start_time
             session['timeout'] = TIMEOUT
         session["window_size"] = window_size if real_time_update else DEFAULT_WINDOW_SIZE
         session["real_time_update"] = real_time_update
@@ -575,6 +587,18 @@ def results_page():
     
     window_size = session['window_size']
     real_time_update = session['real_time_update']
+    
+    if real_time_update:
+        # initialize the stream
+        stream_start_date = session['stream_start_date']
+        stream_start_time = session['stream_start_time']
+        # send start datetime to the stream server
+        stream_start_datetime = datetime.combine(stream_start_date, stream_start_time)
+        inited_start_datetime = requests.get(SERVER_URL + '/init_stream', params={'start_time': stream_start_datetime}).json()
+        # restart dataframes
+        st.session_state['df_hrate_full'] = pd.DataFrame()
+        st.session_state['df_calories_full'] = pd.DataFrame()
+        st.session_state['df_coords_full'] = pd.DataFrame()
 
     
     if 'df_hrate_full' not in st.session_state or 'df_calories_full' not in st.session_state or 'df_coords_full' not in st.session_state:

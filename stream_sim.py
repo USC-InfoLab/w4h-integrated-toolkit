@@ -67,9 +67,14 @@ class DataLoader(metaclass=Singleton):
         if start_time is None:
             return self.df.iloc[self.row_ind].timestamp
         start_time = pd.Timestamp(start_time, tz='UTC')
-        start_time_ind = self.df[self.df.timestamp < start_time].index.max() + 1
-        self.row_ind = start_time_ind
-        return self.df.iloc[start_time_ind].timestamp
+        if start_time <= self.df.iloc[0].timestamp:
+            self.row_ind = 0
+        elif start_time >= self.df.iloc[-1].timestamp:
+            self.row_ind = self.df.loc[self.df.timestamp == self.df.iloc[-1].timestamp].index.min()
+        else:
+            start_time_ind = self.df[self.df.timestamp < start_time].index.max() + 1
+            self.row_ind = start_time_ind
+        return self.df.iloc[self.row_ind].timestamp
         
             
 

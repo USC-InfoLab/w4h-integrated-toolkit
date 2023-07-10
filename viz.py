@@ -205,12 +205,12 @@ def add_aux_rectangles(fig, df, df_full, window_start, window_end, real_time=Fal
     # Set the number of windows and calculate the window size
     check_window_num = 600
     date_range = df.index[-1] - df.index[0]
-    unsafe_check_window_size = date_range / check_window_num
+    unsafe_check_window_size = max(date_range / check_window_num, timedelta(seconds=30))
     unsafe_check_window_start = df.index[0]
     if not unsafe_values.empty:
-        while unsafe_check_window_start < unsafe_values.index[-1]:
-            num_unsafe_vals = unsafe_values[(unsafe_values.index >= unsafe_check_window_start) & (unsafe_values.index < unsafe_check_window_start + unsafe_check_window_size)].shape[0]
-            num_all_vals = df[(df.index >= unsafe_check_window_start) & (df.index < unsafe_check_window_start + unsafe_check_window_size)].shape[0]
+        while unsafe_check_window_start <= unsafe_values.index[-1]:
+            num_unsafe_vals = unsafe_values[(unsafe_values.index >= unsafe_check_window_start) & (unsafe_values.index < (unsafe_check_window_start + unsafe_check_window_size))].shape[0]
+            num_all_vals = df[(df.index >= unsafe_check_window_start) & (df.index < (unsafe_check_window_start + unsafe_check_window_size))].shape[0]
             if num_unsafe_vals > 0:
                 fig.add_shape(
                         type='rect',
@@ -510,7 +510,7 @@ def input_page(garmin_df):
 
     if real_time_update:
         window_size = st.number_input('Window Size (seconds)', value=session.get("window_size", DEFAULT_WINDOW_SIZE), step=15)
-        TIMEOUT = st.number_input('Fast Forward (Every 15s Equals)', value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
+        TIMEOUT = st.number_input('Fast Forward (Every 1 Minute Equals)', value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
     
 
         

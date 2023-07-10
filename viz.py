@@ -832,7 +832,7 @@ def results_page():
             grouped_df_hrate = df_hrate.groupby('user_id')
             
             for user_id, group in grouped_df_hrate:
-                fig_hrate.add_scattergl(x=group.index, y=group['value'],
+                fig_hrate.add_scatter(x=group.index, y=group['value'],
                                         name=f'user_id: {user_id}')
                 fig_hrate.update_traces(showlegend=True)
             fig_hrate.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
@@ -841,14 +841,14 @@ def results_page():
             # plot calories for each user
             grouped_df_calories = df_calories.groupby('user_id')
             for user_id, group in grouped_df_calories:
-                fig_calories.add_scattergl(x=group.index, y=group['value'], name=f'user_id: {user_id}')
+                fig_calories.add_scatter(x=group.index, y=group['value'], name=f'user_id: {user_id}')
             fig_calories.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
             # add_aux_rectangles(fig_calories, df_calories, df_calories_full, window_start_time, window_end_time, real_time=real_time_update)
 
             # plot mets for each user
             grouped_df_mets = df_mets.groupby('user_id')
             for user_id, group in grouped_df_mets:
-                fig_mets.add_scattergl(x=group.index, y=group['value'], name=f'user_id: {user_id}')
+                fig_mets.add_scatter(x=group.index, y=group['value'], name=f'user_id: {user_id}')
             fig_mets.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
 
             

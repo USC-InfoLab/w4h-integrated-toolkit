@@ -239,7 +239,7 @@ def get_bar_fig(df, label='Feature'):
         yaxis_title=label,
         margin=dict(l=10, r=10, t=10, b=10)
     )
-    fig.update_traces(marker_color=['#636EFA', '#EF553B'])
+    fig.update_traces(marker_color=['#636EFA', '#00B050'])
 
     return fig
 
@@ -499,12 +499,12 @@ def input_page(garmin_df):
         col1, col2 = st.columns(2)
         with col1:
             stream_start_date = st.date_input(
-            "Start Date for Simulating Stream",
+            "Start Date for Simulating Real-Time Stream",
             session.get("stream_start_date", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
             )
         with col2:
             stream_start_time = st.time_input(
-            "Start Time for Simulating Stream",
+            "Start Time for Simulating Real-Time Stream",
             session.get("stream_start_time", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
             )
 

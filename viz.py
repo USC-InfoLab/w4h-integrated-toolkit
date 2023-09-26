@@ -510,7 +510,7 @@ def input_page(garmin_df):
 
     if real_time_update:
         window_size = st.number_input('Window Size (seconds)', value=session.get("window_size", DEFAULT_WINDOW_SIZE), step=15)
-        TIMEOUT = st.number_input('Fast Forward (Every 1 Minute Equals)', value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
+        TIMEOUT = st.number_input('Fast Forward (Every 1 Minute Equals How Many Seconds?)', value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
     
 
         

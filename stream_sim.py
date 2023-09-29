@@ -67,6 +67,8 @@ class DataLoader(metaclass=Singleton):
         if start_time is None:
             return self.df.iloc[self.row_ind].timestamp
         start_time = pd.Timestamp(start_time, tz='UTC')
+        # remove timezone
+        start_time = start_time.tz_localize(None)
         if start_time <= self.df.iloc[0].timestamp:
             self.row_ind = 0
         elif start_time >= self.df.iloc[-1].timestamp:

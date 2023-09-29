@@ -669,6 +669,16 @@ def results_page():
         df_mets_full = calculate_mets(df_calories_full)
         
         # filtering data
+        # fix subject ids dtype
+        user_id_dtype = df_hrate_full.user_id.dtype
+        if user_id_dtype == np.int64:
+            user_id_dtype = int
+        # else if string
+        elif user_id_dtype == np.object:
+            user_id_dtype = str
+        # cast subject ids and control ids to the same dtype as df_hrate dtype
+        subject_ids = [user_id_dtype(item) for item in subject_ids]
+        control_ids = [user_id_dtype(item) for item in control_ids]
         df_hrate = df_hrate_full.loc[df_hrate_full['user_id'].isin(subject_ids)]
         df_calories = df_calories_full.loc[df_calories_full['user_id'].isin(subject_ids)]
         df_coords = df_coords_full.loc[df_coords_full['user_id'].isin(subject_ids)]

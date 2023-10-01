@@ -1055,6 +1055,34 @@ def results_page():
         time.sleep(session.get("timeout", TIMEOUT))
 
 
+def login_page():
+    st.title("User login")
+
+    # 用户名和密码输入字段
+    username = st.text_input("username")
+    password = st.text_input("password", type="password")
+
+    # 登录按钮
+    if st.button("login"):
+    # 在这里添加验证逻辑
+        db_conn = get_db_engine()
+        try:
+            query = f"SELECT password FROM login WHERE username = '{username}'"
+            print(query)
+            df = pd.read_sql(query,db_conn)
+            print(password)
+            print(type(df['password'][0]))
+            if (df.empty == False and (password == df['password'][0])):
+                st.session_state["page"] = "input"
+                st.experimental_rerun()
+            else:
+                st.error("username or password is wrong")
+        except Exception as err:
+            print(Exception,err)
+            st.error("something wrong in the server")
+
+
+
 
 
 def main():
@@ -1066,8 +1094,9 @@ def main():
     if session is None:
         st.error("Please run the app first.")
         return
-
-    if session.get("page", "input") == "input":
+    if session.get("page","login") == "login":
+        login_page()
+    elif session.get("page","input") == "input":
         garmin_df = get_garmin_df(get_db_engine())
         garmin_df.age = garmin_df.age.astype(int)
         garmin_df.weight = garmin_df.weight.astype(int)

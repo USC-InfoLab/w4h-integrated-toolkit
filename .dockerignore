@@ -3,5 +3,4 @@ venv/
 .vscide/
 .git/
 .idea/
-__pycache__/
-conf/
+__pycache__

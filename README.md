@@ -52,18 +52,15 @@ Run:
    And you will see a login portal, you can use the default account to test it:  
    >username: admin  
    password: admin
-
-
+   
 2. **Use your own database:**
 If you have your own database(postgreSQL), you can create a conf directory, and put your conf.py in it.  
 like this:
-
    >.  
    |____conf  
    | |____conf.py
 
    You can refer to conf.py.example to write conf.py
-
    Now you're ready to set the docker!  
    Run:
    ```shell

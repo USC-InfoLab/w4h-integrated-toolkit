@@ -31,7 +31,41 @@ After the stream simulation service is up and running, initiate the dashboard us
     ```
     Once the dashboard is started, you can access it via the URL provided by `streamlit` in your terminal.
 
+# Setup your server with Docker  
+
+## Prerequisites
+docker has been installed in you server. run:  
+```shell
+docker
+```
+
+to see
+## Setup
+
+1. **test version of w4h:**
+It includes a default test database with sample data. you can setup it and see how the system works without your own data source.  
+Run:
+   ```shell
+   docker run -dp 8501:8501 chickensellerred/w4h:test 
+   ```
+
+   And you will see a login portal, you can use the default account to test it:  
+   >username: admin  
+   password: admin
 
 
+2. **Use your own database:**
+If you have your own database(postgreSQL), you can create a conf directory, and put your conf.py in it.  
+like this:
 
+   >.  
+   |____conf  
+   | |____conf.py
 
+   You can refer to conf.py.example to write conf.py
+
+   Now you're ready to set the docker!  
+   Run:
+   ```shell
+   docker run -dp 8501:8501 -v {your_conf_directory_absolute_path}:app/conf/ chickensellerred/w4h:1.0
+   ```

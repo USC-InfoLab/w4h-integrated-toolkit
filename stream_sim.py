@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from loguru import logger
 import urllib.parse
 
-from conf import *
+from conf.conf import *
 from utils import Singleton
 
 data_loader_inited = False
@@ -65,7 +65,7 @@ class DataLoader(metaclass=Singleton):
             start_time (str): The time to start streaming from.
         """
         if start_time is None:
-            return self.df.iloc[self.row_ind].timestamp
+            return self.df.iloc[self.row_ind].timestampcon
         start_time = pd.Timestamp(start_time, tz='UTC')
         # remove timezone
         start_time = start_time.tz_localize(None)

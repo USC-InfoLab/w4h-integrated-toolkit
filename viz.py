@@ -23,7 +23,7 @@ import math
 
 # ptvsd.enable_attach(address=('localhost', 5678))
 
-from conf import *
+from conf.conf import *
 
 # DEFAULT_START_DATE = date.today()
 ACTIVITIES_REAL_INTERVAL = 15

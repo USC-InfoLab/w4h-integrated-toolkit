@@ -1,5 +1,5 @@
 # Don't state conf.py
-conf.py
+conf/conf.py
 
 # Don't stages dataset
 *.csv

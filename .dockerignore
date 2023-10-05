@@ -1,0 +1,7 @@
+venv/
+.streamlit/
+.vscide/
+.git/
+.idea/
+__pycache__/
+conf/

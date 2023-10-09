@@ -10,6 +10,12 @@ ptvsd==4.3.2
 pydeck==0.8.0
 requests==2.27.1
 SQLAlchemy==1.4.32
-streamlit==1.21.0
+streamlit==1.24.1
 streamlit_ext
 Werkzeug==2.3.7
+fuzzywuzzy==0.18.0
+
+
+GeoAlchemy2==0.14.1
+PyYAML==6.0.1
+SQLAlchemy_Utils==0.41.1

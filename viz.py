@@ -11,6 +11,8 @@ from sqlalchemy import create_engine
 import urllib.parse
 import requests, json
 import pydeck as pdk
+from nav import createNav
+from import_hub_main import import_page
 
 # ptvsd.enable_attach(address=('localhost', 5678))
 
@@ -1048,22 +1050,19 @@ def results_page():
 
 def login_page():
     st.title("User login")
-
-    # 用户名和密码输入字段
     username = st.text_input("username")
     password = st.text_input("password", type="password")
 
-    # 登录按钮
+    if 'login-state' in st.session_state.keys():
+        del st.session_state['login-state']
+
     if st.button("login"):
-    # 在这里添加验证逻辑
         db_conn = get_db_engine()
         try:
             query = f"SELECT password FROM login WHERE username = '{username}'"
-            print(query)
             df = pd.read_sql(query,db_conn)
-            print(password)
-            print(type(df['password'][0]))
             if (df.empty == False and (password == df['password'][0])):
+                st.session_state["login-state"] = True
                 st.session_state["page"] = "input"
                 st.experimental_rerun()
             else:
@@ -1080,19 +1079,22 @@ def main():
     # dashboard title
     st.title("Real-Time / Apple-Watch Heart-Rate Monitoring Dashboard")
     session = st.session_state
+    createNav()
     
     # Display the appropriate page based on the session state
     if session is None:
         st.error("Please run the app first.")
         return
-    if session.get("page","login") == "login":
+    if session.get("login-state",False) == False or session.get("page","login") == "login":
         login_page()
-    elif session.get("page","input") == "input":
+    elif session.get("page") == "input":
         garmin_df = get_garmin_df(get_db_engine())
         garmin_df.age = garmin_df.age.astype(int)
         garmin_df.weight = garmin_df.weight.astype(int)
         garmin_df.height = garmin_df.height.astype(int)
         input_page(garmin_df)
+    elif session.get("page") == "import":
+        import_page()
     elif session.get("page") == "results":
         results_page()
 

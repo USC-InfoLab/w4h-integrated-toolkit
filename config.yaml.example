@@ -1,0 +1,30 @@
+database:
+  dbms: 'postgresql'
+  host: <hostname> # Replace with your DB host
+  port: <port> # Replace with your DB port
+  user: <username> # Replace with your DB username
+  password: <password> # Replace with your DB password
+
+
+mapping:
+  columns:
+    user_id: 'user_id'
+    timestamp: 'timestamp'
+    value: 'value'
+  tables:
+    user_table:
+      name: 'geomts_users'
+      columns:
+        user_id: String(50)
+        device: String(50)
+        location: String(50)
+    time_series:
+      - heart_rates
+      - calories
+      - mets
+      - distances
+      - steps
+      - sleep
+      - weight
+    geo:
+      - locations

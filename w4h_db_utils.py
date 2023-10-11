@@ -1,4 +1,6 @@
 import datetime
+import sqlite3
+
 from loguru import logger
 import pandas as pd
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String, ForeignKey, DateTime, REAL
@@ -91,7 +93,7 @@ def get_existing_databases(config_file='config.yaml') -> list:
         list: List of all existing databases (strings)
     """
     config = load_config(config_file=config_file)
-    db_engine = get_db_engine(config_file,'w4h-synthetic')
+    db_engine = get_db_engine(config_file)
     with db_engine.connect() as connection:
         result = connection.execute(text("SELECT datname FROM pg_database WHERE datistemplate = false;"))
         databases = [row[0] for row in result]
@@ -192,3 +194,19 @@ def populate_subject_table(df: pd.DataFrame, db_name: str, config_path='config.y
     # Commit the remaining changes and close the session
     engine.dispose()
 
+def getCurrentDbByUsername(username):
+    conn = sqlite3.connect('user.db')
+    cursor = conn.cursor()
+    cursor.execute('''select current_db from users where username = ?''',(username,))
+    result = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    print("result",result)
+    return result[0]
+
+def updateCurrentDbByUsername(username,currentDb):
+    conn = sqlite3.connect('user.db')
+    cursor = conn.cursor()
+    cursor.execute('''update users set current_db = ? where username = ?''',(currentDb,username,))
+    conn.commit()
+    conn.close()

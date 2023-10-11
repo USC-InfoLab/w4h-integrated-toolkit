@@ -20,6 +20,7 @@ from import_hub_main import import_page
 
 from conf.conf import *
 import sqlite3
+from w4h_db_utils import *
 
 # DEFAULT_START_DATE = date.today()
 ACTIVITIES_REAL_INTERVAL = 15
@@ -38,7 +39,7 @@ currentDbName = ""
 # get db engine
 def get_db_engine():
     db_pass_enc = urllib.parse.quote_plus(DB_PASS)
-    return create_engine(f'postgresql://{DB_USER}:{db_pass_enc}@{DB_HOST}:{DB_PORT}/{DB_NAME}')
+    return create_engine(f'postgresql://{DB_USER}:{db_pass_enc}@{DB_HOST}:{DB_PORT}/{st.session_state["current_db"]}')
 
 # get user ids
 def get_garmin_user_id(db_conn, pattern=None):
@@ -301,7 +302,7 @@ def input_page(garmin_df):
     if session is None:
         st.error("Please run the app first.")
         return
-    
+
     # preparing data
     user_ids = garmin_df.user_id.tolist()
     rank_options = garmin_df['rank'].unique().tolist()
@@ -456,12 +457,12 @@ def input_page(garmin_df):
     if not real_time_update:
         start_date = st.date_input(
         "Start date",
-        session.get("start_date", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+        session.get("start_date", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
         )
         
         end_date = st.date_input(
         "End date",
-        session.get("end_date", datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S'))
+        session.get("end_date", datetime.datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S'))
         )
         
         st.markdown("#### Need to analyze specific time range? Select how many range(s) you want to analyze.")
@@ -698,8 +699,8 @@ def results_page():
         avg_mets = df_mets['value'].mean()
         
         # getting window records
-        window_end_time = df_hrate.index[-1] if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.now(), tz='UTC')
-        window_start_time = (df_hrate.index[-1] - timedelta(seconds=window_size)) if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.now(), tz='UTC')
+        window_end_time = df_hrate.index[-1] if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.datetime.now(), tz='UTC')
+        window_start_time = (df_hrate.index[-1] - timedelta(seconds=window_size)) if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.datetime.now(), tz='UTC')
         
         if real_time_update:
             window_hrate_df = df_hrate.loc[df_hrate.index >= window_start_time]
@@ -1076,6 +1077,7 @@ def login_page():
             encodePwd = hasher.digest()
             if (row[0] == encodePwd):
                 st.session_state["login-state"] = True
+                st.session_state["login-username"] = username
                 st.session_state["page"] = "input"
                 st.experimental_rerun()
             else:
@@ -1102,11 +1104,29 @@ def main():
     if session.get("login-state",False) == False or session.get("page","login") == "login":
         login_page()
     elif session.get("page") == "input":
-        garmin_df = get_garmin_df(get_db_engine())
-        garmin_df.age = garmin_df.age.astype(int)
-        garmin_df.weight = garmin_df.weight.astype(int)
-        garmin_df.height = garmin_df.height.astype(int)
-        input_page(garmin_df)
+        # if session doesn't contain key "current_db"
+        print("a current_db:",session.get("current_db"))
+        if not session.get("current_db"):
+            session["current_db"] = getCurrentDbByUsername(session.get("login-username"))
+
+        print("b current_db:", session.get("current_db"))
+        # show a drop list to choose current db
+
+        pre_current_db = session.get('current_db')
+        exist_databases = [""]+get_existing_databases()
+        session["current_db"] = st.selectbox("Select a database", exist_databases, index=exist_databases.index(
+            pre_current_db) if pre_current_db in exist_databases else 0)
+        if pre_current_db != session.get('current_db'):
+            pre_current_db = session.get('current_db')
+            updateCurrentDbByUsername(session.get("login-username"), session.get('current_db'))
+            st.experimental_rerun()
+
+        if(session["current_db"] != ""):
+            garmin_df = get_garmin_df(get_db_engine())
+            garmin_df.age = garmin_df.age.astype(int)
+            garmin_df.weight = garmin_df.weight.astype(int)
+            garmin_df.height = garmin_df.height.astype(int)
+            input_page(garmin_df)
     elif session.get("page") == "import":
         import_page()
     elif session.get("page") == "results":

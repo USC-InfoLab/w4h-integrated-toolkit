@@ -38,8 +38,10 @@ currentDbName = ""
 
 # get db engine
 def get_db_engine():
-    db_pass_enc = urllib.parse.quote_plus(DB_PASS)
-    return create_engine(f'postgresql://{DB_USER}:{db_pass_enc}@{DB_HOST}:{DB_PORT}/{st.session_state["current_db"]}')
+    config = load_config("config.yaml")
+    db_user_enc = urllib.parse.quote_plus(config["database"]["user"])
+    db_pass_enc = urllib.parse.quote_plus(config["database"]["password"])
+    return create_engine(f'postgresql://{db_user_enc}:{db_pass_enc}@{config["database"]["host"]}:{config["database"]["port"]}/{st.session_state["current_db"]}')
 
 # get user ids
 def get_garmin_user_id(db_conn, pattern=None):

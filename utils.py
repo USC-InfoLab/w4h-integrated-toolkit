@@ -1,3 +1,5 @@
+import sqlite3
+
 import yaml
 import sqlalchemy
 from sqlalchemy import create_engine
@@ -75,3 +77,4 @@ def get_db_engine(config_file: str, db_name=None) -> sqlalchemy.engine.base.Engi
     db_engine = create_engine(con_str, echo=True, future=True)
 
     return db_engine
+

@@ -1,3 +1,5 @@
+import hashlib
+
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -17,6 +19,7 @@ from import_hub_main import import_page
 # ptvsd.enable_attach(address=('localhost', 5678))
 
 from conf.conf import *
+import sqlite3
 
 # DEFAULT_START_DATE = date.today()
 ACTIVITIES_REAL_INTERVAL = 15
@@ -28,6 +31,8 @@ DEFAULT_MAX_HRATE = 115
 # Define the USC location as a latitude and longitude
 USC_CENTER_Y = 34.0224
 USC_CENTER_X = -118.2851
+
+currentDbName = ""
 
 
 # get db engine
@@ -1057,11 +1062,19 @@ def login_page():
         del st.session_state['login-state']
 
     if st.button("login"):
-        db_conn = get_db_engine()
+        conn = sqlite3.connect('user.db')
+        cursor = conn.cursor()
         try:
-            query = f"SELECT password FROM login WHERE username = '{username}'"
-            df = pd.read_sql(query,db_conn)
-            if (df.empty == False and (password == df['password'][0])):
+            cursor.execute('''select password,salt from users where username = ?''',(username,))
+            row = cursor.fetchone()
+            if row is None:
+                st.error("user not exist!")
+                conn.close()
+                return
+            hasher = hashlib.sha256()
+            hasher.update(row[1] + password.encode('utf-8'))
+            encodePwd = hasher.digest()
+            if (row[0] == encodePwd):
                 st.session_state["login-state"] = True
                 st.session_state["page"] = "input"
                 st.experimental_rerun()
@@ -1070,6 +1083,7 @@ def login_page():
         except Exception as err:
             print(Exception,err)
             st.error("something wrong in the server")
+        conn.close()
 
 
 

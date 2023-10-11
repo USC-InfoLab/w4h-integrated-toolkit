@@ -91,7 +91,7 @@ def get_existing_databases(config_file='config.yaml') -> list:
         list: List of all existing databases (strings)
     """
     config = load_config(config_file=config_file)
-    db_engine = get_db_engine(config_file)
+    db_engine = get_db_engine(config_file,'w4h-synthetic')
     with db_engine.connect() as connection:
         result = connection.execute(text("SELECT datname FROM pg_database WHERE datistemplate = false;"))
         databases = [row[0] for row in result]

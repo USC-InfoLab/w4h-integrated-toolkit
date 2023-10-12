@@ -14,8 +14,6 @@ streamlit==1.24.1
 streamlit_ext
 Werkzeug==2.3.7
 fuzzywuzzy==0.18.0
-
-
 GeoAlchemy2==0.14.1
 PyYAML==6.0.1
 SQLAlchemy_Utils==0.41.1

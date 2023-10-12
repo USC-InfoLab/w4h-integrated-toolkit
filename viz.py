@@ -4,7 +4,8 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import streamlit_ext as ste
-from datetime import datetime, timedelta
+from datetime import datetime as dt
+from datetime import timedelta
 from datetime import time as dt_time
 import plotly.express as px
 import plotly.graph_objs as go
@@ -94,7 +95,7 @@ SERVER_URL = f"http://{HOST}:{PORT}"
 # read data from Flask server (real-time) or from database (historical)
 def get_data(session=None, real_time=False) -> pd.DataFrame:
     if real_time:
-        response = requests.get(SERVER_URL)
+        response = requests.get(SERVER_URL,params={'db_name':st.session_state["current_db"]})
         data = response.json()
         df_hrate = pd.DataFrame(data)
         # df_hrate = pd.DataFrame(data['heart_rates'])
@@ -501,12 +502,12 @@ def input_page(garmin_df):
         with col1:
             stream_start_date = st.date_input(
             "Start Date for Simulating Real-Time Stream",
-            session.get("stream_start_date", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+            session.get("stream_start_date", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
             )
         with col2:
             stream_start_time = st.time_input(
             "Start Time for Simulating Real-Time Stream",
-            session.get("stream_start_time", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+            session.get("stream_start_time", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
             )
 
     if real_time_update:
@@ -594,8 +595,8 @@ def results_page():
         stream_start_date = session['stream_start_date']
         stream_start_time = session['stream_start_time']
         # send start datetime to the stream server
-        stream_start_datetime = datetime.combine(stream_start_date, stream_start_time)
-        inited_start_datetime = requests.get(SERVER_URL + '/init_stream', params={'start_time': stream_start_datetime}).json()
+        stream_start_datetime = dt.combine(stream_start_date, stream_start_time)
+        inited_start_datetime = requests.get(SERVER_URL + '/init_stream', params={'start_time': stream_start_datetime,'db_name':st.session_state["current_db"]},verify=False).json()
         # restart dataframes
         st.session_state['df_hrate_full'] = pd.DataFrame()
         st.session_state['df_calories_full'] = pd.DataFrame()
@@ -769,7 +770,8 @@ def results_page():
                     value=round(avg_heart_rate),
                     delta=round(avg_heart_rate - control_stats['heart_rate']['avg']),
                 )
-            except:
+            except Exception as e:
+                st.error(e)
                 st.error("No data available for heart rate")
                 break
             
@@ -1107,11 +1109,8 @@ def main():
         login_page()
     elif session.get("page") == "input":
         # if session doesn't contain key "current_db"
-        print("a current_db:",session.get("current_db"))
         if not session.get("current_db"):
             session["current_db"] = getCurrentDbByUsername(session.get("login-username"))
-
-        print("b current_db:", session.get("current_db"))
         # show a drop list to choose current db
 
         pre_current_db = session.get('current_db')

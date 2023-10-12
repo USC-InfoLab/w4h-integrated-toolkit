@@ -6,6 +6,8 @@ COPY . .
 
 RUN pip install -r requirements.txt
 
-CMD ["python","init_user.py"]
-CMD ["python", "stream_sim.py"]
-CMD ["streamlit", "run", "viz.py"]
+RUN chmod +x /app/inituser_and_start.sh
+
+# 在容器启动时运行 entrypoint.sh 脚本
+CMD ["./inituser_and_start.sh"]
+

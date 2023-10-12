@@ -15,7 +15,7 @@ encode_pass = hasher.digest()
 #store password
 conn = sqlite3.connect('user.db')
 cursor = conn.cursor()
-cursor.execute('''drop table users''')
+cursor.execute('''drop table if exists users''')
 cursor.execute('''create table if not exists users (
                     username text primary key,
                     password BLOB,

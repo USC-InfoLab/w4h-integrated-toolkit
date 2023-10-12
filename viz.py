@@ -1087,7 +1087,7 @@ def login_page():
             else:
                 st.error("username or password is wrong")
         except Exception as err:
-            print(Exception,err)
+            st.error(err)
             st.error("something wrong in the server")
         conn.close()
 

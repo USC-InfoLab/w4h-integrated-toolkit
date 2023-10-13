@@ -1,6 +1,5 @@
 import hashlib
 
-import pandas as pd
 import numpy as np
 import streamlit as st
 import streamlit_ext as ste
@@ -10,7 +9,6 @@ from datetime import time as dt_time
 import plotly.express as px
 import plotly.graph_objs as go
 import time
-from sqlalchemy import create_engine
 import urllib.parse
 import requests, json
 import pydeck as pdk
@@ -19,8 +17,7 @@ from import_hub_main import import_page
 
 # ptvsd.enable_attach(address=('localhost', 5678))
 
-from conf.conf import *
-import sqlite3
+from conf import *
 from w4h_db_utils import *
 
 # DEFAULT_START_DATE = date.today()

@@ -14,9 +14,9 @@ db's host,username,password,database name, and the port it is listening to.
   - port: your db's port
   - user: your db's username
   - password: your db's password
-3. rename the file to config.yaml
+3. rename the file to config.yaml and put it into a directory named "conf"
 4. shutdown the current docker container
 5. rerun the docker:  
   ```shell
-  docker run -dp 8501:8501 -v {your_config.yaml's_absolute_path}:app/conf/config.yaml chickensellerred/w4h:2.0
+  docker run -dp 8501:8501 -v {your_conf_directory_absolute_path}:/app/conf chickensellerred/w4h:2.0
   ```

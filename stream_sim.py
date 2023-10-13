@@ -3,11 +3,9 @@ from flask import Flask, jsonify, redirect, url_for, request
 from sqlalchemy import create_engine
 from loguru import logger
 import urllib.parse
-import streamlit as st
 
-from conf.conf import *
+from conf import *
 from utils import Singleton, load_config
-import traceback
 
 data_loader_inited = False
 

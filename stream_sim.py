@@ -89,7 +89,7 @@ def get_db_engine(db_name=None):
     Returns:
         engine (sqlalchemy.engine.base.Engine): SQLAlchemy engine object.
     """
-    config = load_config("config.yaml")["database"]
+    config = load_config("conf/config.yaml")["database"]
     db_user_enc = urllib.parse.quote_plus(config["user"])
     db_pass_enc = urllib.parse.quote_plus(config["password"])
     # traceback.print_exc()

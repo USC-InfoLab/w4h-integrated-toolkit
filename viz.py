@@ -39,7 +39,7 @@ currentDbName = ""
 
 # get db engine
 def get_db_engine():
-    config = load_config("config.yaml")
+    config = load_config("conf/config.yaml")
     db_user_enc = urllib.parse.quote_plus(config["database"]["user"])
     db_pass_enc = urllib.parse.quote_plus(config["database"]["password"])
     return create_engine(f'postgresql://{db_user_enc}:{db_pass_enc}@{config["database"]["host"]}:{config["database"]["port"]}/{st.session_state["current_db"]}')
@@ -1042,13 +1042,6 @@ def results_page():
                         "df_hrate_control.csv",
                         "text/csv"
                     )
-                    
-                
-            
-                        
-                        
-                
-            
         if not real_time_update:
             # reset dataframes
             st.session_state['df_hrate_full'] = pd.DataFrame()
@@ -1067,14 +1060,15 @@ def login_page():
         del st.session_state['login-state']
 
     if st.button("login"):
-        conn = sqlite3.connect('user.db')
-        cursor = conn.cursor()
+        conn1 = sqlite3.connect('user.db')
+        cursor = conn1.cursor()
         try:
             cursor.execute('''select password,salt from users where username = ?''',(username,))
             row = cursor.fetchone()
+            print(row)
             if row is None:
                 st.error("user not exist!")
-                conn.close()
+                conn1.close()
                 return
             hasher = hashlib.sha256()
             hasher.update(row[1] + password.encode('utf-8'))
@@ -1089,9 +1083,19 @@ def login_page():
         except Exception as err:
             st.error(err)
             st.error("something wrong in the server")
-        conn.close()
+        conn1.close()
 
+def tutorial_page():
+    page = st.selectbox("Select a tutorial", ["Setting up", "How to start"])
 
+    if page == "Setting up":
+        with open('setting_up.md', 'r', encoding='utf-8') as markdown_file:
+            markdown_text = markdown_file.read()
+    elif page == "How to start":
+        with open('how_to_start.md', 'r', encoding='utf-8') as markdown_file:
+            markdown_text = markdown_file.read()
+    # 显示Markdown内容
+    st.markdown(markdown_text, unsafe_allow_html=True)
 
 
 
@@ -1105,7 +1109,9 @@ def main():
     if session is None:
         st.error("Please run the app first.")
         return
-    if session.get("login-state",False) == False or session.get("page","login") == "login":
+    if session.get("page") == "tutorial":
+        tutorial_page()
+    elif session.get("login-state",False) == False or session.get("page","login") == "login":
         login_page()
     elif session.get("page") == "input":
         # if session doesn't contain key "current_db"
@@ -1135,4 +1141,6 @@ def main():
 
 
 if __name__ == '__main__':
+    if not st.session_state.get("page"):
+        st.session_state['page'] = 'tutorial'
     main()

@@ -23,6 +23,5 @@ cursor.execute('''create table if not exists users (
                     current_db text)''')
 cursor.execute('''insert into users
                     values("admin",?,?,"")''',(encode_pass,salt,))
-
 conn.commit()
 conn.close()

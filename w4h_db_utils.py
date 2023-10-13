@@ -13,12 +13,12 @@ from geoalchemy2 import Geometry
 from utils import load_config, get_db_engine
 
 
-def create_tables(db_name: str, config_file='config.yaml'):
+def create_tables(db_name: str, config_file='conf/config.yaml'):
     """Create the W4H tables in the database with the given name based on the config file
 
     Args:
         db_name (str): Name of the database to create the tables in
-        config_file (str, optional): Path to the config file. Defaults to 'config.yaml'.
+        config_file (str, optional): Path to the config file. Defaults to 'conf/config.yaml'.
     """
     metadata = MetaData()
     config = load_config(config_file=config_file)
@@ -53,12 +53,12 @@ def create_tables(db_name: str, config_file='config.yaml'):
     
         
         
-def create_w4h_instance(db_name: str, config_file='config.yaml'):
+def create_w4h_instance(db_name: str, config_file='conf/config.yaml'):
     """Create a new W4H database instance with the given name and initialize the tables based on the config file
 
     Args:
         db_name (str): Name of the database to create
-        config_file (str, optional): Path to the config file. Defaults to 'config.yaml'.
+        config_file (str, optional): Path to the config file. Defaults to 'conf/config.yaml'.
     """
     db_engine_tmp = get_db_engine(config_file)
     logger.info('Database engine created!')
@@ -83,11 +83,11 @@ def create_w4h_instance(db_name: str, config_file='config.yaml'):
     logger.success(f"W4H tables initialized!")
     
     
-def get_existing_databases(config_file='config.yaml') -> list:
+def get_existing_databases(config_file='conf/config.yaml') -> list:
     """Get a list of all existing databases
 
     Args:
-        config_file (str, optional): Path to the config file. Defaults to 'config.yaml'.
+        config_file (str, optional): Path to the config file. Defaults to 'conf/config.yaml'.
 
     Returns:
         list: List of all existing databases (strings)
@@ -101,7 +101,7 @@ def get_existing_databases(config_file='config.yaml') -> list:
     return databases
 
 
-def populate_tables(df: pd.DataFrame, db_name: str, mappings: dict, config_path='config.yaml'):
+def populate_tables(df: pd.DataFrame, db_name: str, mappings: dict, config_path='conf/config.yaml'):
     """Populate the W4H tables in the given database with the data from the given dataframe based on 
     the mappings between the CSV columns and the database tables.
 
@@ -109,7 +109,7 @@ def populate_tables(df: pd.DataFrame, db_name: str, mappings: dict, config_path=
         df (pd.DataFrame): Dataframe containing the data to be inserted into the database
         db_name (str): Name of the database to insert the data into
         mappings (dict): Dictionary containing the mappings between the CSV columns and the database tables
-        config_path (str, optional): Path to the config file. Defaults to 'config.yaml'.
+        config_path (str, optional): Path to the config file. Defaults to 'conf/config.yaml'.
     """
     # Load the config
     config = load_config(config_path)
@@ -173,14 +173,14 @@ def populate_tables(df: pd.DataFrame, db_name: str, mappings: dict, config_path=
     engine.dispose()
 
 
-def populate_subject_table(df: pd.DataFrame, db_name: str, config_path='config.yaml', user_tbl_name=None):
+def populate_subject_table(df: pd.DataFrame, db_name: str, config_path='conf/config.yaml', user_tbl_name=None):
     """Populate the W4H subject table in the given database with the data from the given dataframe based on
     the given subject table name in the config file.
 
     Args:
         df (pd.DataFrame): Dataframe containing the subject data to be inserted into the database
         db_name (str): Name of the subject database to insert the data into
-        config_path (str, optional): Path to the config file. Defaults to 'config.yaml'.
+        config_path (str, optional): Path to the config file. Defaults to 'conf/config.yaml'.
     """
     # Load the config
     config = load_config(config_path)

@@ -215,13 +215,10 @@ def getCurrentDbByUsername(username):
         cursor = conn.cursor()
         cursor.execute('''select current_db from users where username = ?''',(username,))
         result = cursor.fetchone()
-        conn.commit()
-        conn.close()
-        return result[0]
+    return result[0]
 
 def updateCurrentDbByUsername(username,currentDb):
     with sqlite3.connect('user.db') as conn:
         cursor = conn.cursor()
         cursor.execute('''update users set current_db = ? where username = ?''',(currentDb,username,))
         conn.commit()
-        conn.close()

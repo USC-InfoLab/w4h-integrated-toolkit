@@ -48,7 +48,7 @@ def load_config(config_file: str) -> dict:
             print(exc)
 
 
-def get_db_engine(config_file: str, db_name=None) -> sqlalchemy.engine.base.Engine:
+def get_db_engine(config_file: str='conf/config.yaml', db_name=None) -> sqlalchemy.engine.base.Engine:
     """Create a SQLAlchemy Engine instance based on the config file
 
     Args:

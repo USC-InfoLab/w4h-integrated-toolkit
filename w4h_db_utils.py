@@ -23,33 +23,35 @@ def create_tables(db_name: str, config_file='conf/config.yaml'):
     metadata = MetaData()
     config = load_config(config_file=config_file)
     db_engine = get_db_engine(config_file, db_name=db_name)
+    try:
+        columns_config = config["mapping"]["columns"]
 
-    columns_config = config["mapping"]["columns"]
+        # Create the user table
+        user_table_config = config["mapping"]["tables"]["user_table"]
+        user_columns = [eval(f'Column("{col_name}", {col_dtype}, primary_key={col_name == columns_config["user_id"]})') for col_name, col_dtype in user_table_config["columns"].items()]  # Convert string to actual SQLAlchemy type
+        user_table = Table(user_table_config["name"], metadata, *user_columns)
 
-    # Create the user table
-    user_table_config = config["mapping"]["tables"]["user_table"]
-    user_columns = [eval(f'Column("{col_name}", {col_dtype}, primary_key={col_name == columns_config["user_id"]})') for col_name, col_dtype in user_table_config["columns"].items()]  # Convert string to actual SQLAlchemy type
-    user_table = Table(user_table_config["name"], metadata, *user_columns)
-    
-    
-    # Create time series tables
-    for table_name in config["mapping"]["tables"]["time_series"]:
-        table = Table(table_name, metadata,
-            Column(columns_config["user_id"], ForeignKey(user_table_config["name"] + '.' + columns_config["user_id"]), primary_key=True),
-            Column(columns_config["timestamp"], DateTime, primary_key=True),
-            Column(columns_config["value"], REAL),
-        )
-    
-    # Create geo tables
-    for table_name in config["mapping"]["tables"]["geo"]:
-        table = Table(table_name, metadata,
-            Column(columns_config["user_id"], ForeignKey(user_table_config["name"] + '.' + columns_config["user_id"]), primary_key=True),
-            Column(columns_config["timestamp"], DateTime, primary_key=True),
-            Column(columns_config["value"], Geometry('POINT'))
-        )
-    
-    metadata.create_all(db_engine)
-    db_engine.dispose()
+
+        # Create time series tables
+        for table_name in config["mapping"]["tables"]["time_series"]:
+            table = Table(table_name, metadata,
+                Column(columns_config["user_id"], ForeignKey(user_table_config["name"] + '.' + columns_config["user_id"]), primary_key=True),
+                Column(columns_config["timestamp"], DateTime, primary_key=True),
+                Column(columns_config["value"], REAL),
+            )
+
+        # Create geo tables
+        for table_name in config["mapping"]["tables"]["geo"]:
+            table = Table(table_name, metadata,
+                Column(columns_config["user_id"], ForeignKey(user_table_config["name"] + '.' + columns_config["user_id"]), primary_key=True),
+                Column(columns_config["timestamp"], DateTime, primary_key=True),
+                Column(columns_config["value"], Geometry('POINT'))
+            )
+
+        metadata.create_all(db_engine)
+    except Exception as err:
+        db_engine.dispose()
+        logger.error(err)
     
         
         
@@ -209,17 +211,17 @@ def populate_subject_table(df: pd.DataFrame, db_name: str, config_path='conf/con
     engine.dispose()
 
 def getCurrentDbByUsername(username):
-    conn = sqlite3.connect('user.db')
-    cursor = conn.cursor()
-    cursor.execute('''select current_db from users where username = ?''',(username,))
-    result = cursor.fetchone()
-    conn.commit()
-    conn.close()
-    return result[0]
+    with sqlite3.connect('user.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('''select current_db from users where username = ?''',(username,))
+        result = cursor.fetchone()
+        conn.commit()
+        conn.close()
+        return result[0]
 
 def updateCurrentDbByUsername(username,currentDb):
-    conn = sqlite3.connect('user.db')
-    cursor = conn.cursor()
-    cursor.execute('''update users set current_db = ? where username = ?''',(currentDb,username,))
-    conn.commit()
-    conn.close()
+    with sqlite3.connect('user.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('''update users set current_db = ? where username = ?''',(currentDb,username,))
+        conn.commit()
+        conn.close()

@@ -61,23 +61,32 @@ def create_w4h_instance(db_name: str, config_file='conf/config.yaml'):
         config_file (str, optional): Path to the config file. Defaults to 'conf/config.yaml'.
     """
     db_engine_tmp = get_db_engine(config_file)
-    logger.info('Database engine created!')
-    # Execute the SQL command to create the database if it doesn't exist
-    if not database_exists(f'{db_engine_tmp.url}{db_name}'):
-        create_database(f'{db_engine_tmp.url}{db_name}')
-        logger.success(f"Database {db_name} created!")
+    try:
+        logger.info('Database engine created!')
+        # Execute the SQL command to create the database if it doesn't exist
+        if not database_exists(f'{db_engine_tmp.url}{db_name}'):
+            create_database(f'{db_engine_tmp.url}{db_name}')
+            logger.success(f"Database {db_name} created!")
+            db_engine_tmp.dispose()
+        else:
+            logger.error(f"Database {db_name} already exists!")
+            db_engine_tmp.dispose()
+            return
+    except Exception as err:
+        logger.error(err)
         db_engine_tmp.dispose()
-    else:
-        logger.error(f"Database {db_name} already exists!")
-        db_engine_tmp.dispose()
-        return
     db_engine = get_db_engine(config_file, db_name=db_name)
-    # Enable PostGIS extension
-    with db_engine.connect() as connection:
-        connection.execute(text(f"CREATE EXTENSION postgis;"))
-        logger.success(f"PostGIS extension enabled for {db_name}!")
-        connection.commit()
-    db_engine.dispose()
+    try:
+        # Enable PostGIS extension
+        with db_engine.connect() as connection:
+            connection.execute(text(f"CREATE EXTENSION postgis;"))
+            logger.success(f"PostGIS extension enabled for {db_name}!")
+            connection.commit()
+        db_engine.dispose()
+    except Exception as err:
+        logger.error(err)
+        db_engine.dispose()
+        return
     # Create the W4H tables
     create_tables(config_file=config_file, db_name=db_name)
     logger.success(f"W4H tables initialized!")
@@ -94,11 +103,16 @@ def get_existing_databases(config_file='conf/config.yaml') -> list:
     """
     config = load_config(config_file=config_file)
     db_engine = get_db_engine(config_file)
-    with db_engine.connect() as connection:
-        result = connection.execute(text("SELECT datname FROM pg_database WHERE datistemplate = false;"))
-        databases = [row[0] for row in result]
-    db_engine.dispose()
-    return databases
+    try:
+        with db_engine.connect() as connection:
+            result = connection.execute(text("SELECT datname FROM pg_database WHERE datistemplate = false;"))
+            databases = [row[0] for row in result]
+        db_engine.dispose()
+        return databases
+    except Exception as err:
+        logger.error(err)
+        db_engine.dispose()
+        return []
 
 
 def populate_tables(df: pd.DataFrame, db_name: str, mappings: dict, config_path='conf/config.yaml'):
@@ -201,7 +215,6 @@ def getCurrentDbByUsername(username):
     result = cursor.fetchone()
     conn.commit()
     conn.close()
-    print("result",result)
     return result[0]
 
 def updateCurrentDbByUsername(username,currentDb):

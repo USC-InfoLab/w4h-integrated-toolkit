@@ -1062,7 +1062,6 @@ def login_page():
         try:
             cursor.execute('''select password,salt from users where username = ?''',(username,))
             row = cursor.fetchone()
-            print(row)
             if row is None:
                 st.error("user not exist!")
                 conn1.close()

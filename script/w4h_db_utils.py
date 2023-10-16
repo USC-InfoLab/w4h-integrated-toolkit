@@ -1,4 +1,5 @@
 import datetime
+import os
 import sqlite3
 
 from loguru import logger
@@ -10,7 +11,7 @@ from sqlalchemy_utils import database_exists, create_database
 
 from geoalchemy2 import Geometry
 
-from utils import load_config, get_db_engine
+from script.utils import load_config, get_db_engine
 
 
 def create_tables(db_name: str, config_file='conf/config.yaml'):
@@ -211,6 +212,7 @@ def populate_subject_table(df: pd.DataFrame, db_name: str, config_path='conf/con
     engine.dispose()
 
 def getCurrentDbByUsername(username):
+    print(os.getcwd())
     with sqlite3.connect('user.db') as conn:
         cursor = conn.cursor()
         cursor.execute('''select current_db from users where username = ?''',(username,))

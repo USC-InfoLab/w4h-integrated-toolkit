@@ -4,8 +4,8 @@ from sqlalchemy import create_engine
 from loguru import logger
 import urllib.parse
 
-from conf import *
-from utils import Singleton
+from script.conf import *
+from script.utils import Singleton, load_config
 
 data_loader_inited = False
 
@@ -65,7 +65,7 @@ class DataLoader(metaclass=Singleton):
             start_time (str): The time to start streaming from.
         """
         if start_time is None:
-            return self.df.iloc[self.row_ind].timestamp
+            return self.df.iloc[self.row_ind].timestampcon
         start_time = pd.Timestamp(start_time, tz='UTC')
         # remove timezone
         start_time = start_time.tz_localize(None)
@@ -80,15 +80,18 @@ class DataLoader(metaclass=Singleton):
         
             
 
-def get_db_engine():
+def get_db_engine(db_name=None):
     """
     Returns a SQLAlchemy engine for connecting to the database.
 
     Returns:
         engine (sqlalchemy.engine.base.Engine): SQLAlchemy engine object.
     """
-    db_pass_enc = urllib.parse.quote_plus(DB_PASS)
-    return create_engine(f'{DBMS}://{DB_USER}:{db_pass_enc}@{DB_HOST}:{DB_PORT}/{DB_NAME}')
+    config = load_config("conf/config.yaml")["database"]
+    db_user_enc = urllib.parse.quote_plus(config["user"])
+    db_pass_enc = urllib.parse.quote_plus(config["password"])
+    # traceback.print_exc()
+    return create_engine(f'{config["dbms"]}://{db_user_enc}:{db_pass_enc}@{config["host"]}:{config["port"]}/{db_name}')
 
 
 def get_query_result(query, db_conn, params=[]):
@@ -161,6 +164,7 @@ def get_data(config):
     start_time = config.get('START_TIME', None)
     db_table = config.get('DB_TABLE', None)
     date_time_col = config.get('DATE_TIME_COL', None)
+    db_name = config.get('DB_NAME', None)
     
     if date_time_col is None:
         raise ValueError('DATE_TIME_COL must be specified.')
@@ -168,7 +172,7 @@ def get_data(config):
         raise ValueError('DATA_TYPE must be either DATABASE or CSV.')
     if data_type == 'DATABASE':
         # Fetching data from database table
-        db_conn = get_db_engine()
+        db_conn = get_db_engine(db_name)
         return get_series_from_db(db_conn, table_name=db_table, ids=ids, start_time=start_time)
     elif data_type == 'CSV':
         # Fetching data from CSV file
@@ -186,7 +190,7 @@ def get_data(config):
         return df 
 
 
-def init_dataloader(inited=False):
+def init_dataloader(inited=False,db_name=None,start_time=None):
     """
     Initializes the DataLoader with the fetched data based on the configuration.
     
@@ -201,9 +205,10 @@ def init_dataloader(inited=False):
             'DATA_TYPE': DATA_TYPE,
             'DATASET': DATASET,
             'IDS': get_ids(),
-            'START_TIME': START_TIME,
+            'START_TIME': start_time,
             'DB_TABLE': DB_TABLE,
-            'DATE_TIME_COL': DATE_TIME_COL
+            'DATE_TIME_COL': DATE_TIME_COL,
+            'DB_NAME': db_name
         }
         data = get_data(config)
         data_loader_inited = True
@@ -232,7 +237,8 @@ def root():
     Returns:
         Response: A redirection response to the 'fetch_sensor_data' endpoint.
     """
-    return redirect(url_for('fetch_sensor_data'))
+    db_name = request.args.get('db_name')
+    return redirect(url_for('fetch_sensor_data',db_name=db_name))
 
 
 @app.route('/init_stream', methods=['GET'])
@@ -249,7 +255,8 @@ def init_stream():
     global data_loader_inited
 
     requested_start = request.args.get('start_time', None)
-    data_loader = init_dataloader(inited=data_loader_inited)
+    db_name = request.args.get('db_name', None)
+    data_loader = init_dataloader(inited=data_loader_inited,db_name=db_name,start_time = requested_start)
     inited_start_time = data_loader.init_start_stream_index(requested_start)
     resp = jsonify({'start_time': inited_start_time})
     logger.debug(resp)
@@ -265,8 +272,9 @@ def fetch_sensor_data():
         Response: A JSON response containing the fetched sensor data.
     """
     global data_loader_inited
-    
-    data_loader = init_dataloader(inited=data_loader_inited)
+
+    db_name = request.args.get('db_name')
+    data_loader = init_dataloader(inited=data_loader_inited,db_name=db_name)
     data_loader_inited = True
     rows = data_loader.get_next()
     rows_with_strftime = rows.copy()

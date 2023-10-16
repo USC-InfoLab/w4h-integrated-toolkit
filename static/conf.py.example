@@ -1,0 +1,25 @@
+# Sensor API
+HOST = '0.0.0.0'
+URL_PATH = 'fetchdata'
+PORT = '9977'
+DATA_TYPE = 'DATABASE' # 'DATABASE' or 'CSV'
+DATASET = '<dataset_path>' # Path of the CSV dataset. Leave empty if you want to stream from database table
+
+# Database Config
+DBMS = 'postgresql'
+DB_HOST = '<DB_HOST_IP>'
+DB_PORT = '<DB_PORT>'
+DB_USER = '<DB_USER>'
+DB_PASS = '<DB_PASS>'
+DB_NAME = '<DB_NAME>'
+DB_TABLE = '<DB_FEATURE_TABLE>'
+DB_USER_TABLE = '<DB_USER_TABLE>'
+
+# After each TIMEOUT (seconds), BATCH number of data entries is sent by the API
+# Start time is the time recorded data stream is simulated to start from
+DATE_TIME_COL = 'timestamp'
+BATCH = 1
+TIMEOUT = 5
+START_TIME = '2018-04-30 8:20:00'
+END_TIME = '2018-05-06 23:59:59'
+

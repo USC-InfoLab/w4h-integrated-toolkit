@@ -14,7 +14,7 @@ First, navigate to the project directory and install the necessary packages usin
 2. **Configure Database Properties:**
 Copy the provided example configuration file to create your own configuration:
     ```bash
-    cp conf.py.example conf.py
+    cp static/config.yaml.example conf/config.yaml.py
     ```
     Now, edit the `conf.py` file with your desired database properties and credentials. Ensure you have proper access rights and credentials for the database.
 
@@ -31,7 +31,19 @@ After the stream simulation service is up and running, initiate the dashboard us
     ```
     Once the dashboard is started, you can access it via the URL provided by `streamlit` in your terminal.
 
+# Setup your server with Docker  
 
+## Prerequisites
+docker has been installed in you server. run:  
+```shell
+docker
+```
 
+to check
+## Setup
 
-
+Run:
+   ```shell
+   docker run -dp 8501:8501 uscimsc/w4h:latest 
+   ```
+Then access http://{your_server_ip}:8501/ to see the dashboard.

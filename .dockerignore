@@ -1,0 +1,7 @@
+venv/
+.vscide/
+.git/
+.idea/
+__pycache__
+user.db
+/conf

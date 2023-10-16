@@ -1,29 +1,24 @@
-import pandas as pd
+import hashlib
+
 import numpy as np
 import streamlit as st
 import streamlit_ext as ste
-from datetime import datetime, date, timedelta
+from datetime import datetime as dt
+from datetime import timedelta
 from datetime import time as dt_time
 import plotly.express as px
 import plotly.graph_objs as go
-from plotly.subplots import make_subplots
 import time
-import random, hashlib
-from sqlalchemy import create_engine, select
 import urllib.parse
 import requests, json
-import ptvsd
-from loguru import logger
 import pydeck as pdk
-import jinja2
-from ipywidgets import HTML
-import math
-
-
+from script.nav import createNav
+from script.import_hub_main import import_page
 
 # ptvsd.enable_attach(address=('localhost', 5678))
 
-from conf import *
+from script.conf import *
+from script.w4h_db_utils import *
 
 # DEFAULT_START_DATE = date.today()
 ACTIVITIES_REAL_INTERVAL = 15
@@ -36,11 +31,15 @@ DEFAULT_MAX_HRATE = 115
 USC_CENTER_Y = 34.0224
 USC_CENTER_X = -118.2851
 
+currentDbName = ""
+
 
 # get db engine
 def get_db_engine():
-    db_pass_enc = urllib.parse.quote_plus(DB_PASS)
-    return create_engine(f'postgresql://{DB_USER}:{db_pass_enc}@{DB_HOST}:{DB_PORT}/{DB_NAME}')
+    config = load_config("conf/config.yaml")
+    db_user_enc = urllib.parse.quote_plus(config["database"]["user"])
+    db_pass_enc = urllib.parse.quote_plus(config["database"]["password"])
+    return create_engine(f'postgresql://{db_user_enc}:{db_pass_enc}@{config["database"]["host"]}:{config["database"]["port"]}/{st.session_state["current_db"]}')
 
 # get user ids
 def get_garmin_user_id(db_conn, pattern=None):
@@ -93,7 +92,7 @@ SERVER_URL = f"http://{HOST}:{PORT}"
 # read data from Flask server (real-time) or from database (historical)
 def get_data(session=None, real_time=False) -> pd.DataFrame:
     if real_time:
-        response = requests.get(SERVER_URL)
+        response = requests.get(SERVER_URL,params={'db_name':st.session_state["current_db"]})
         data = response.json()
         df_hrate = pd.DataFrame(data)
         # df_hrate = pd.DataFrame(data['heart_rates'])
@@ -303,7 +302,7 @@ def input_page(garmin_df):
     if session is None:
         st.error("Please run the app first.")
         return
-    
+
     # preparing data
     user_ids = garmin_df.user_id.tolist()
     rank_options = garmin_df['rank'].unique().tolist()
@@ -458,12 +457,12 @@ def input_page(garmin_df):
     if not real_time_update:
         start_date = st.date_input(
         "Start date",
-        session.get("start_date", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+        session.get("start_date", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
         )
         
         end_date = st.date_input(
         "End date",
-        session.get("end_date", datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S'))
+        session.get("end_date", datetime.datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S'))
         )
         
         st.markdown("#### Need to analyze specific time range? Select how many range(s) you want to analyze.")
@@ -500,12 +499,12 @@ def input_page(garmin_df):
         with col1:
             stream_start_date = st.date_input(
             "Start Date for Simulating Real-Time Stream",
-            session.get("stream_start_date", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+            session.get("stream_start_date", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
             )
         with col2:
             stream_start_time = st.time_input(
             "Start Time for Simulating Real-Time Stream",
-            session.get("stream_start_time", datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+            session.get("stream_start_time", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
             )
 
     if real_time_update:
@@ -593,8 +592,8 @@ def results_page():
         stream_start_date = session['stream_start_date']
         stream_start_time = session['stream_start_time']
         # send start datetime to the stream server
-        stream_start_datetime = datetime.combine(stream_start_date, stream_start_time)
-        inited_start_datetime = requests.get(SERVER_URL + '/init_stream', params={'start_time': stream_start_datetime}).json()
+        stream_start_datetime = dt.combine(stream_start_date, stream_start_time)
+        inited_start_datetime = requests.get(SERVER_URL + '/init_stream', params={'start_time': stream_start_datetime,'db_name':st.session_state["current_db"]},verify=False).json()
         # restart dataframes
         st.session_state['df_hrate_full'] = pd.DataFrame()
         st.session_state['df_calories_full'] = pd.DataFrame()
@@ -700,8 +699,8 @@ def results_page():
         avg_mets = df_mets['value'].mean()
         
         # getting window records
-        window_end_time = df_hrate.index[-1] if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.now(), tz='UTC')
-        window_start_time = (df_hrate.index[-1] - timedelta(seconds=window_size)) if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.now(), tz='UTC')
+        window_end_time = df_hrate.index[-1] if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.datetime.now(), tz='UTC')
+        window_start_time = (df_hrate.index[-1] - timedelta(seconds=window_size)) if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.datetime.now(), tz='UTC')
         
         if real_time_update:
             window_hrate_df = df_hrate.loc[df_hrate.index >= window_start_time]
@@ -768,7 +767,8 @@ def results_page():
                     value=round(avg_heart_rate),
                     delta=round(avg_heart_rate - control_stats['heart_rate']['avg']),
                 )
-            except:
+            except Exception as e:
+                st.error(e)
                 st.error("No data available for heart rate")
                 break
             
@@ -1039,13 +1039,6 @@ def results_page():
                         "df_hrate_control.csv",
                         "text/csv"
                     )
-                    
-                
-            
-                        
-                        
-                
-            
         if not real_time_update:
             # reset dataframes
             st.session_state['df_hrate_full'] = pd.DataFrame()
@@ -1055,27 +1048,95 @@ def results_page():
         time.sleep(session.get("timeout", TIMEOUT))
 
 
+def login_page():
+    st.title("User login")
+    username = st.text_input("username")
+    password = st.text_input("password", type="password")
+
+    if 'login-state' in st.session_state.keys():
+        del st.session_state['login-state']
+
+    if st.button("login"):
+        conn = sqlite3.connect('user.db')
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''select password,salt from users where username = ?''',(username,))
+            row = cursor.fetchone()
+            if row is None:
+                st.error("user not exist!")
+                conn.close()
+                return
+            hasher = hashlib.sha256()
+            hasher.update(row[1] + password.encode('utf-8'))
+            encodePwd = hasher.digest()
+            if (row[0] == encodePwd):
+                st.session_state["login-state"] = True
+                st.session_state["login-username"] = username
+                st.session_state["page"] = "input"
+                st.experimental_rerun()
+            else:
+                st.error("username or password is wrong")
+        except Exception as err:
+            st.error(err)
+            st.error("something wrong in the server")
+        conn.close()
+
+def tutorial_page():
+    page = st.selectbox("Select a tutorial", ["Setting up", "How to start"])
+
+    if page == "Setting up":
+        with open('markdown/setting_up.md', 'r', encoding='utf-8') as markdown_file:
+            markdown_text = markdown_file.read()
+    elif page == "How to start":
+        with open('markdown/how_to_start.md', 'r', encoding='utf-8') as markdown_file:
+            markdown_text = markdown_file.read()
+    # 显示Markdown内容
+    st.markdown(markdown_text, unsafe_allow_html=True)
+
 
 
 def main():
     # dashboard title
     st.title("Real-Time / Apple-Watch Heart-Rate Monitoring Dashboard")
     session = st.session_state
+    createNav()
     
     # Display the appropriate page based on the session state
     if session is None:
         st.error("Please run the app first.")
         return
+    if session.get("page") == "tutorial":
+        tutorial_page()
+    elif session.get("login-state",False) == False or session.get("page","login") == "login":
+        login_page()
+    elif session.get("page") == "input":
+        # if session doesn't contain key "current_db"
+        if not session.get("current_db"):
+            session["current_db"] = getCurrentDbByUsername(session.get("login-username"))
+        # show a drop list to choose current db
 
-    if session.get("page", "input") == "input":
-        garmin_df = get_garmin_df(get_db_engine())
-        garmin_df.age = garmin_df.age.astype(int)
-        garmin_df.weight = garmin_df.weight.astype(int)
-        garmin_df.height = garmin_df.height.astype(int)
-        input_page(garmin_df)
+        pre_current_db = session.get('current_db')
+        exist_databases = [""]+get_existing_databases()
+        session["current_db"] = st.selectbox("Select a database", exist_databases, index=exist_databases.index(
+            pre_current_db) if pre_current_db in exist_databases else 0)
+        if pre_current_db != session.get('current_db'):
+            pre_current_db = session.get('current_db')
+            updateCurrentDbByUsername(session.get("login-username"), session.get('current_db'))
+            st.experimental_rerun()
+
+        if(session["current_db"] != ""):
+            garmin_df = get_garmin_df(get_db_engine())
+            garmin_df.age = garmin_df.age.astype(int)
+            garmin_df.weight = garmin_df.weight.astype(int)
+            garmin_df.height = garmin_df.height.astype(int)
+            input_page(garmin_df)
+    elif session.get("page") == "import":
+        import_page()
     elif session.get("page") == "results":
         results_page()
 
 
 if __name__ == '__main__':
+    if not st.session_state.get("page"):
+        st.session_state['page'] = 'tutorial'
     main()

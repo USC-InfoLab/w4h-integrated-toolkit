@@ -4,9 +4,9 @@ import difflib
 import re
 from fuzzywuzzy import process
 
-from utils import load_config
+from script.utils import load_config
 
-from w4h_db_utils import create_w4h_instance, get_existing_databases, populate_tables, populate_subject_table
+from script.w4h_db_utils import create_w4h_instance, get_existing_databases, populate_tables, populate_subject_table
 
 
 CONFIG_FILE = 'conf/config.yaml'

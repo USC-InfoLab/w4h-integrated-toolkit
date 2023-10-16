@@ -14,7 +14,7 @@ First, navigate to the project directory and install the necessary packages usin
 2. **Configure Database Properties:**
 Copy the provided example configuration file to create your own configuration:
     ```bash
-    cp conf.py.example conf.py
+    cp static/config.yaml.example conf/config.yaml.py
     ```
     Now, edit the `conf.py` file with your desired database properties and credentials. Ensure you have proper access rights and credentials for the database.
 
@@ -39,30 +39,11 @@ docker has been installed in you server. run:
 docker
 ```
 
-to see
+to check
 ## Setup
 
-1. **test version of w4h:**
-It includes a default test database with sample data. you can setup it and see how the system works without your own data source.  
 Run:
    ```shell
-   docker run -dp 8501:8501 chickensellerred/w4h:test 
+   docker run -dp 8501:8501 chickensellerred/w4h:latest 
    ```
-
-   And you will see a login portal, you can use the default account to test it:  
-   >username: admin  
-   password: admin
-   
-2. **Use your own database:**
-If you have your own database(postgreSQL), you can create a conf directory, and put your conf.py in it.  
-like this:
-   >.  
-   |____conf  
-   | |____conf.py
-
-   You can refer to conf.py.example to write conf.py
-   Now you're ready to set the docker!  
-   Run:
-   ```shell
-   docker run -dp 8501:8501 -v {your_conf_directory_absolute_path}:app/conf/ chickensellerred/w4h:1.0
-   ```
+Then access http://{your_server_ip}:8501/ to see the dashboard.

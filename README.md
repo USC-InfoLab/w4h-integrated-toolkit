@@ -44,6 +44,6 @@ to check
 
 Run:
    ```shell
-   docker run -dp 8501:8501 chickensellerred/w4h:latest 
+   docker run -dp 8501:8501 uscimsc/w4h:latest 
    ```
 Then access http://{your_server_ip}:8501/ to see the dashboard.

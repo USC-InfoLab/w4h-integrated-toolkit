@@ -12,13 +12,13 @@ import time
 import urllib.parse
 import requests, json
 import pydeck as pdk
-from nav import createNav
-from import_hub_main import import_page
+from script.nav import createNav
+from script.import_hub_main import import_page
 
 # ptvsd.enable_attach(address=('localhost', 5678))
 
-from conf import *
-from w4h_db_utils import *
+from script.conf import *
+from script.w4h_db_utils import *
 
 # DEFAULT_START_DATE = date.today()
 ACTIVITIES_REAL_INTERVAL = 15
@@ -1057,14 +1057,14 @@ def login_page():
         del st.session_state['login-state']
 
     if st.button("login"):
-        conn1 = sqlite3.connect('user.db')
-        cursor = conn1.cursor()
+        conn = sqlite3.connect('user.db')
+        cursor = conn.cursor()
         try:
             cursor.execute('''select password,salt from users where username = ?''',(username,))
             row = cursor.fetchone()
             if row is None:
                 st.error("user not exist!")
-                conn1.close()
+                conn.close()
                 return
             hasher = hashlib.sha256()
             hasher.update(row[1] + password.encode('utf-8'))
@@ -1079,16 +1079,16 @@ def login_page():
         except Exception as err:
             st.error(err)
             st.error("something wrong in the server")
-        conn1.close()
+        conn.close()
 
 def tutorial_page():
     page = st.selectbox("Select a tutorial", ["Setting up", "How to start"])
 
     if page == "Setting up":
-        with open('setting_up.md', 'r', encoding='utf-8') as markdown_file:
+        with open('markdown/setting_up.md', 'r', encoding='utf-8') as markdown_file:
             markdown_text = markdown_file.read()
     elif page == "How to start":
-        with open('how_to_start.md', 'r', encoding='utf-8') as markdown_file:
+        with open('markdown/how_to_start.md', 'r', encoding='utf-8') as markdown_file:
             markdown_text = markdown_file.read()
     # 显示Markdown内容
     st.markdown(markdown_text, unsafe_allow_html=True)

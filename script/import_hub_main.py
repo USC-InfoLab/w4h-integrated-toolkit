@@ -68,7 +68,14 @@ def populate_db(df: pd.DataFrame, db_name: str, mappings: dict, config_path: str
     st.write("Populating database...")
     st.write(mappings)
     populate_tables(df, db_name, mappings, config_path)
-    
+
+def generate_mets_by_calories(df):
+    similar_weight = find_closest_name(df.columns, 'weight user_weight')
+    similar_calories = find_closest_name(df.columns, 'calories')
+    if(similar_weight == ''):
+        df['mets'] = df['calories'] / 17.5
+    else:
+        df['mets'] = df['calories'] / (df[similar_weight] * 0.25)
 
 def import_page():
     """Main function for the streamlit app"""
@@ -126,6 +133,7 @@ def import_page():
     if uploaded_file and not is_subjects_populated:
         st.success("File uploaded!")
         df = pd.read_csv(uploaded_file)
+        df = generate_mets_by_calories(df)
         st.write("Columns in your CSV:")
         st.write(df.columns)
 
@@ -134,7 +142,7 @@ def import_page():
 
         # Default selections based on column name similarity
         default_timestamp = find_closest_name(df.columns, 'time timestamp date start_time end_time')
-        default_user_id = find_closest_name(df.columns, 'user id email')
+        default_user_id = find_closest_name(df.columns, 'user id email patient')
 
         timestamp_col = st.selectbox("**Select Timestamp Column**", df.columns, index=df.columns.get_loc(default_timestamp))
         user_id_col = st.selectbox("**Select User ID Column**", df.columns, index=df.columns.get_loc(default_user_id))

@@ -67,13 +67,13 @@ def get_garmin_df(db_conn, pattern=None):
 
 
 def calculate_mets(cal_df, user_weights=None):
-    # if not user_weights:
-    #     user_weights = dict(zip(cal_df.user_id.unique(), np.ones(cal_df.user_id.nunique()) * 70))
-    # mets_df = cal_df.copy()
-    # mets_df['value'] = mets_df.apply(lambda x: x['value'] / (user_weights[x['user_id']] * 0.25), axis=1)
+    if not user_weights:
+        user_weights = dict(zip(cal_df.user_id.unique(), np.ones(cal_df.user_id.nunique()) * 70))
+    mets_df = cal_df.copy()
+    mets_df['value'] = mets_df.apply(lambda x: x['value'] / (user_weights[x['user_id']] * 0.25), axis=1)
 
-    # return mets_df
-    return pd.DataFrame(columns=['user_id', 'timestamp', 'value'])
+    return mets_df
+    # return pd.DataFrame(columns=['user_id', 'timestamp', 'value'])
 
 
 

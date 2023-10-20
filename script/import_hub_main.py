@@ -70,12 +70,14 @@ def populate_db(df: pd.DataFrame, db_name: str, mappings: dict, config_path: str
     populate_tables(df, db_name, mappings, config_path)
 
 def generate_mets_by_calories(df):
-    similar_weight = find_closest_name(df.columns, 'weight user_weight')
+    similar_weight = find_closest_name(['None']+list(df.columns), 'weight')
     similar_calories = find_closest_name(df.columns, 'calories')
-    if(similar_weight == ''):
-        df['mets'] = df['calories'] / 17.5
+    print("similar_weight: ", similar_weight)
+    if(similar_weight == 'None'):
+        df['w4h-mets'] = df[similar_calories] / (70 * 0.25)
     else:
-        df['mets'] = df['calories'] / (df[similar_weight] * 0.25)
+        df['w4h-mets'] = df[similar_calories] / (df[similar_weight] * 0.25)
+    return df
 
 def import_page():
     """Main function for the streamlit app"""

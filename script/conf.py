@@ -9,6 +9,8 @@ DATASET = '<dataset_path>' # Path of the CSV dataset. Leave empty if you want to
 
 DB_TABLE = 'heart_rates'
 DB_USER_TABLE = 'subjects'
+DB_CALORIES_TABLE = 'calories'
+DB_COORDINATES_TABLE = 'locations'
 
 # After each TIMEOUT (seconds), BATCH number of data entries is sent by the API
 # Start time is the time recorded data stream is simulated to start from

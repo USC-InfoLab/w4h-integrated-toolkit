@@ -1,6 +1,8 @@
 import hashlib
+import traceback
 
 import numpy as np
+import pandas as pd
 import streamlit as st
 import streamlit_ext as ste
 from datetime import datetime as dt
@@ -14,6 +16,7 @@ import requests, json
 import pydeck as pdk
 from script.nav import createNav
 from script.import_hub_main import import_page
+import geopandas as gpd
 
 # ptvsd.enable_attach(address=('localhost', 5678))
 
@@ -68,6 +71,7 @@ def get_garmin_df(db_conn, pattern=None):
 
 def calculate_mets(cal_df, user_weights=None):
     if not user_weights:
+        print('no user weights provided, using default')
         user_weights = dict(zip(cal_df.user_id.unique(), np.ones(cal_df.user_id.nunique()) * 70))
     mets_df = cal_df.copy()
     mets_df['value'] = mets_df.apply(lambda x: x['value'] / (user_weights[x['user_id']] * 0.25), axis=1)
@@ -109,12 +113,23 @@ def get_data(session=None, real_time=False) -> pd.DataFrame:
         start_date = session.get('start_date')
         end_date = session.get('end_date')
         db_conn = get_db_engine()
+        # query heart rate
         df_hrate = pd.read_sql(f"SELECT * FROM {DB_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)", db_conn, params=[start_date, end_date])
         df_hrate.sort_values(by=['timestamp'], inplace=True)
+        # query calories
+        df_calories = pd.read_sql(f"SELECT * FROM {DB_CALORIES_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)", db_conn, params=[start_date, end_date])
+        df_calories.sort_values(by=['timestamp'], inplace=True)
+        # query coordinates
+        df_coords = gpd.read_postgis(f"SELECT * FROM {DB_COORDINATES_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)", db_conn, params=[start_date, end_date], geom_col='value')
+        df_coords.sort_values(by=['timestamp'], inplace=True)
         
     df_hrate['timestamp'] = pd.to_datetime(df_hrate['timestamp'])
     df_hrate = df_hrate.set_index('timestamp')
-    return df_hrate, pd.DataFrame(columns=['user_id', 'timestamp', 'value']), pd.DataFrame(columns=['user_id', 'timestamp', 'value'])
+    df_calories['timestamp'] = pd.to_datetime(df_calories['timestamp'])
+    df_calories = df_calories.set_index('timestamp')
+    df_coords['timestamp'] = pd.to_datetime(df_coords['timestamp'])
+    df_coords = df_coords.set_index('timestamp')
+    return df_hrate, df_calories, df_coords
 
 
 def post_message_to_slack(text, blocks = None):
@@ -257,7 +272,9 @@ def get_map_legend(color_lookup):
 
 # Define function to create Pydeck layer
 def create_layer(df, color):
-    coordinates = df['coordinates'].values.tolist()[0]
+    coordinates = df['coordinates']
+    # st.write(df)
+    # st.write(coordinates)
 
     layer = pdk.Layer(
         # 'user',
@@ -277,16 +294,16 @@ def create_layer(df, color):
         "ScatterplotLayer",
         data=[{"position": coordinates[0]}],
         get_position="position",
-        get_radius=20,
+        get_radius=150,
         get_fill_color=[0, 0, 255],
         pickable=True
     )
     
     marker_layer_end = pdk.Layer(
         "ScatterplotLayer",
-        data=[{"position": coordinates[-1]}],
+        data=[{"position": coordinates.tolist()[-1]}],
         get_position="position",
-        get_radius=20,
+        get_radius=150,
         get_fill_color=[255, 0, 0],
         pickable=True
     )
@@ -304,7 +321,7 @@ def input_page(garmin_df):
         return
 
     # preparing data
-    user_ids = garmin_df.user_id.tolist()
+    user_ids = garmin_df.subj_id.tolist()
     rank_options = garmin_df['rank'].unique().tolist()
     drop_type_options = garmin_df['drop_type'].unique().tolist()
     weight_min, weight_max = int(garmin_df.weight.min()), int(garmin_df.weight.max())
@@ -549,7 +566,7 @@ def input_page(garmin_df):
         
         # Filter the dataframe based on the selected criteria for subjects
         if subject_selection_type == 'id':
-            subjects_df = garmin_df.query('user_id in @selected_users')
+            subjects_df = garmin_df.query('subj_id in @selected_users')
         else:
             subjects_df = garmin_df.query('rank == @selected_rank and drop_type == @selected_drop_type and weight >= @selected_weight_range[0] and weight <= @selected_weight_range[1] and height >= @selected_height_range[0] and height <= @selected_height_range[1] and age >= @selected_age_range[0] and age <= @selected_age_range[1]')
             
@@ -562,11 +579,11 @@ def input_page(garmin_df):
             control_df = garmin_df.query('rank == @selected_rank_control and drop_type == @selected_drop_type_control and weight >= @selected_weight_range_control[0] and weight <= @selected_weight_range_control[1] and height >= @selected_height_range_control[0] and height <= @selected_height_range_control[1] and age >= @selected_age_range_control[0] and age <= @selected_age_range_control[1]')
         
         # Store the filtered dataframe in session state
-        session["subjects_df"] = subjects_df
-        session["control_df"] = control_df
+        session['subjects_df'] = subjects_df
+        session['control_df'] = control_df
         
         # Go to the results page
-        session["page"] = "results"
+        session['page'] = "results"
         st.experimental_rerun()
 
 
@@ -580,9 +597,9 @@ def results_page():
     
    
     subjects_df = session.get('subjects_df')
-    subject_ids = subjects_df.user_id.tolist()
+    subject_ids = subjects_df.subj_id.tolist()
     control_df = session.get('control_df')
-    control_ids = control_df.user_id.tolist()
+    control_ids = control_df.subj_id.tolist()
     
     window_size = session['window_size']
     real_time_update = session['real_time_update']
@@ -597,13 +614,13 @@ def results_page():
         # restart dataframes
         st.session_state['df_hrate_full'] = pd.DataFrame()
         st.session_state['df_calories_full'] = pd.DataFrame()
-        st.session_state['df_coords_full'] = pd.DataFrame()
+        st.session_state['df_coords_full'] = gpd.GeoDataFrame()
 
     
     if 'df_hrate_full' not in st.session_state or 'df_calories_full' not in st.session_state or 'df_coords_full' not in st.session_state:
         st.session_state['df_hrate_full'] = pd.DataFrame()
         st.session_state['df_calories_full'] = pd.DataFrame()
-        st.session_state['df_coords_full'] = pd.DataFrame()
+        st.session_state['df_coords_full'] = gpd.GeoDataFrame()
         
     # Set initial view state
     view_state = pdk.ViewState(
@@ -658,7 +675,7 @@ def results_page():
         df_hrate_full = st.session_state['df_hrate_full']
         df_calories_full = st.session_state['df_calories_full']
         df_coords_full = st.session_state['df_coords_full']
-        new_hrates, new_calories, new_coords = get_data(session=session, real_time=real_time_update)  
+        new_hrates, new_calories, new_coords = get_data(session=session, real_time=real_time_update)
         df_hrate_full = pd.concat([df_hrate_full, new_hrates]) if real_time_update else new_hrates
         df_calories_full = pd.concat([df_calories_full, new_calories]) if real_time_update else new_calories
         df_coords_full = pd.concat([df_coords_full, new_coords]) if real_time_update else new_coords
@@ -677,6 +694,7 @@ def results_page():
             user_id_dtype = str
         # cast subject ids and control ids to the same dtype as df_hrate dtype
         subject_ids = [user_id_dtype(item) for item in subject_ids]
+        # st.write(subject_ids)
         control_ids = [user_id_dtype(item) for item in control_ids]
         df_hrate = df_hrate_full.loc[df_hrate_full['user_id'].isin(subject_ids)]
         df_calories = df_calories_full.loc[df_calories_full['user_id'].isin(subject_ids)]
@@ -730,19 +748,24 @@ def results_page():
                                             control_ids=control_ids)
         
         # Add new data to user trajectories
+        layers = [neighborhood_layer]
         for user_id in df_coords["user_id"].unique():
-            user_data = df_coords[df_coords["user_id"] == user_id][["lon", "lat"]]
-            if user_id not in user_trajectories:
-                user_trajectories[user_id] = {"coordinates": [user_data.values.tolist()], "width": 5}
-            else:
-                user_trajectories[user_id]["coordinates"][0] += (user_data.values.tolist())
+            user_data = df_coords[df_coords["user_id"] == user_id]
+            df = pd.DataFrame(columns=['coordinates', 'width'])
+            dict = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
+            df = df.append(dict,ignore_index=True)
+            layers += create_layer(df, color_lookup[user_id])
+            # user_trajectories[user_id] = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
+
 
         # Create Pydeck layers for each user's trajectory
-        layers = [neighborhood_layer]
-        for user_id, user_trajectory in user_trajectories.items():
-            layer = create_layer(pd.DataFrame(user_trajectory), color=color_lookup[user_id])
-            # layers.append(layer)
-            layers += layer
+        # for user_id, user_trajectory in user_trajectories.items():
+        #     print(user_id)
+        #     print(user_trajectory)
+        #     print(pd.DataFrame(user_trajectory))
+        #     layer = create_layer(pd.DataFrame(user_trajectory), color=color_lookup[user_id])
+        #     # layers.append(layer)
+        #     layers += layer
             
         
         
@@ -768,6 +791,7 @@ def results_page():
                     delta=round(avg_heart_rate - control_stats['heart_rate']['avg']),
                 )
             except Exception as e:
+                traceback.print_exc()
                 st.error(e)
                 st.error("No data available for heart rate")
                 break

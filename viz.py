@@ -39,7 +39,7 @@ currentDbName = ""
 
 # get db engine
 def get_db_engine():
-    config = load_config("conf/config.yaml")
+    config = load_config("conf/temp/config.yaml")
     db_user_enc = urllib.parse.quote_plus(config["database"]["user"])
     db_pass_enc = urllib.parse.quote_plus(config["database"]["password"])
     return create_engine(f'postgresql://{db_user_enc}:{db_pass_enc}@{config["database"]["host"]}:{config["database"]["port"]}/{st.session_state["current_db"]}')
@@ -1116,6 +1116,13 @@ def tutorial_page():
             markdown_text = markdown_file.read()
     # 显示Markdown内容
     st.markdown(markdown_text, unsafe_allow_html=True)
+    if page == "Setting up":
+        config_file = st.file_uploader("Upload config file", type=['yaml', 'example','txt'])
+        update_config = st.button("Update config")
+        if config_file is not None and update_config:
+            with open('conf/config.yaml', 'wb') as f:
+                f.write(config_file.getvalue())
+            st.success("Update success!")
 
 
 
@@ -1146,6 +1153,7 @@ def main():
         if pre_current_db != session.get('current_db'):
             pre_current_db = session.get('current_db')
             updateCurrentDbByUsername(session.get("login-username"), session.get('current_db'))
+            del session['selected_users']
             st.experimental_rerun()
 
         if(session["current_db"] != ""):

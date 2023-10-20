@@ -4,4 +4,4 @@ venv/
 .idea/
 __pycache__
 user.db
-/conf
+tools

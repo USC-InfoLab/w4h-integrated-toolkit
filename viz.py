@@ -273,8 +273,6 @@ def get_map_legend(color_lookup):
 # Define function to create Pydeck layer
 def create_layer(df, color):
     coordinates = df['coordinates']
-    # st.write(df)
-    # st.write(coordinates)
 
     layer = pdk.Layer(
         # 'user',

@@ -9,7 +9,7 @@ db's host,username,password,database name, and the port it is listening to.
 [config.yaml.example](../app/static/config.yaml.example)
 3. create a file named config.yaml, then copy code in the file you downloaded(config.yaml.example), replace these fields:  
 - database:
-  - dbms: 'postgresql'】
+  - dbms: 'postgresql'
   - host: your db's host
   - port: your db's port
   - user: your db's username

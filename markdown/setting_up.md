@@ -18,5 +18,5 @@ db's host,username,password,database name, and the port it is listening to.
 4. shutdown the current docker container
 5. rerun the docker:  
   ```shell
-  docker run -dp 8501:8501 -v {your_conf_directory_absolute_path}:/app/conf uscimsc/w4h:2.0
+  docker run -dp 8501:8501 -v {your_conf_directory_absolute_path}:/app/conf uscimsc/w4h:latest
   ```

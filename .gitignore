@@ -1,5 +1,6 @@
 # Don't state conf.py
 conf/
+tools/
 
 # Don't stages dataset
 *.csv
@@ -166,4 +167,4 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-conf/config.yaml
+conf/temp/config.yaml

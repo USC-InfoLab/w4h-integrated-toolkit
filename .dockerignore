@@ -1,3 +1,4 @@
+
 venv/
 .vscide/
 .git/
@@ -5,3 +6,19 @@ venv/
 __pycache__
 user.db
 tools
+
+# Don't stage notebooks
+*.ipynb
+
+# Don't stage .vscode and .idea
+.vscode/
+.idea/
+
+# Don't state conf.py
+conf/
+tools/
+config.yaml
+
+# Don't stages dataset
+*.csv
+dataset/

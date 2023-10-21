@@ -17,6 +17,8 @@ import pydeck as pdk
 from script.nav import createNav
 from script.import_hub_main import import_page
 import geopandas as gpd
+from shapely import wkb
+
 
 # ptvsd.enable_attach(address=('localhost', 5678))
 
@@ -39,7 +41,7 @@ currentDbName = ""
 
 # get db engine
 def get_db_engine():
-    config = load_config("conf/temp/config.yaml")
+    config = load_config("conf/config.yaml")
     db_user_enc = urllib.parse.quote_plus(config["database"]["user"])
     db_pass_enc = urllib.parse.quote_plus(config["database"]["password"])
     return create_engine(f'postgresql://{db_user_enc}:{db_pass_enc}@{config["database"]["host"]}:{config["database"]["port"]}/{st.session_state["current_db"]}')
@@ -98,10 +100,13 @@ def get_data(session=None, real_time=False) -> pd.DataFrame:
     if real_time:
         response = requests.get(SERVER_URL,params={'db_name':st.session_state["current_db"]})
         data = response.json()
-        df_hrate = pd.DataFrame(data)
-        # df_hrate = pd.DataFrame(data['heart_rates'])
-        # df_calories = pd.DataFrame(data['calories'])
-        # df_coords = pd.DataFrame(data['coordinates'])
+        # df_hrate = pd.DataFrame(data)
+        df_hrate = pd.DataFrame(data['heart_rates'])
+        df_calories = pd.DataFrame(data['calories'])
+        df_coords = pd.DataFrame(data['coordinates'])
+        df_coords['value'] = df_coords['value'].apply(lambda x: wkb.loads(bytes.fromhex(x)))
+        df_coords = gpd.GeoDataFrame(df_coords, geometry='value')
+        print(df_coords)
         # df_hrate['timestamp'] = pd.to_datetime(df_hrate['timestamp'])
         # df_calories['timestamp'] = pd.to_datetime(df_calories['timestamp'])
         # df_coords['timestamp'] = pd.to_datetime(df_coords['timestamp'])
@@ -121,6 +126,7 @@ def get_data(session=None, real_time=False) -> pd.DataFrame:
         df_calories.sort_values(by=['timestamp'], inplace=True)
         # query coordinates
         df_coords = gpd.read_postgis(f"SELECT * FROM {DB_COORDINATES_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)", db_conn, params=[start_date, end_date], geom_col='value')
+        print(df_coords)
         df_coords.sort_values(by=['timestamp'], inplace=True)
         
     df_hrate['timestamp'] = pd.to_datetime(df_hrate['timestamp'])
@@ -131,16 +137,6 @@ def get_data(session=None, real_time=False) -> pd.DataFrame:
     df_coords = df_coords.set_index('timestamp')
     return df_hrate, df_calories, df_coords
 
-
-def post_message_to_slack(text, blocks = None):
-    return requests.post('https://slack.com/api/chat.postMessage', {
-        'token': slack_token,
-        'channel': slack_channel,
-        'text': text,
-        'icon_emoji': slack_icon_emoji,
-        'username': slack_user_name,
-        'blocks': json.dumps(blocks) if blocks else None
-    }).json()
 
 
 def get_control_stats(df_hrate_all, df_calories_all, df_mets_all, control_ids):
@@ -1117,15 +1113,16 @@ def tutorial_page():
         config_file = st.file_uploader("Upload config file", type=['yaml', 'example','txt'])
         update_config = st.button("Update config")
         if config_file is not None and update_config:
-            with open('conf/config.yaml', 'wb') as f:
-                f.write(config_file.getvalue())
+            with open('conf/config.yaml', 'w') as f:
+                # write content as string data into the file
+                f.write(config_file.getvalue().decode("utf-8"))
             st.success("Update success!")
 
 
 
 def main():
     # dashboard title
-    st.title("Real-Time / Apple-Watch Heart-Rate Monitoring Dashboard")
+    st.title("W4H Integrated Toolkit")
     session = st.session_state
     createNav()
     
@@ -1150,7 +1147,8 @@ def main():
         if pre_current_db != session.get('current_db'):
             pre_current_db = session.get('current_db')
             updateCurrentDbByUsername(session.get("login-username"), session.get('current_db'))
-            del session['selected_users']
+            if 'selected_users' in session.keys():
+                del session['selected_users'] 
             st.experimental_rerun()
 
         if(session["current_db"] != ""):

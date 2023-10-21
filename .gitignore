@@ -1,3 +1,10 @@
+# Don't stage notebooks
+*.ipynb
+
+# Don't stage .vscode and .idea
+.vscode/
+.idea/
+
 # Don't state conf.py
 conf/
 tools/

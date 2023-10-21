@@ -206,7 +206,7 @@ def populate_subject_table(df: pd.DataFrame, db_name: str, config_path='conf/con
     engine = get_db_engine(config_path, db_name=db_name)
 
     # populate the user table (directly push df to table), if already exists, append new users
-    df.to_sql(user_tbl_name, engine, if_exists='replace', index=False)
+    df.to_sql(user_tbl_name, engine, if_exists='append', index=False)
 
     # Commit the remaining changes and close the session
     engine.dispose()

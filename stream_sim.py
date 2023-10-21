@@ -24,7 +24,7 @@ class DataLoader(metaclass=Singleton):
         row_ind (int): The current row index.
 
     """
-    def __init__(self, df, batch_size=1, row_ind=0) -> None:
+    def __init__(self, dflist, batch_size=1, row_ind=0) -> None:
         """Initialize the DataLoader with data and parameters.
 
         Args:
@@ -33,7 +33,7 @@ class DataLoader(metaclass=Singleton):
             row_ind (int, optional): The initial row index. Defaults to 0.
 
         """
-        self.df = df
+        self.dflist = dflist
         self.batch_size = batch_size
         self.row_ind = row_ind
         
@@ -49,13 +49,17 @@ class DataLoader(metaclass=Singleton):
             pandas.DataFrame: The next batch of data.
 
         """
-        target_times = (self.df.iloc[self.row_ind:].timestamp.unique())[:self.batch_size]
-        res = self.df[self.df.timestamp.isin(target_times)]
+        full_res = {}
+        features = ['heart_rates','calories','coordinates']
+        for i, df in enumerate(self.dflist):
+            target_times = (df.iloc[self.row_ind:].timestamp.unique())[:self.batch_size]
+            res = df[df.timestamp.isin(target_times)]
+            full_res[features[i]] = res
         # res['timestamp'] = res['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
         self.row_ind += len(res)
-        if self.row_ind >= len(self.df):
+        if self.row_ind >= len(self.dflist[0]):
             self.row_ind = 0
-        return res
+        return full_res
     
     
     def init_start_stream_index(self, start_time):
@@ -65,18 +69,18 @@ class DataLoader(metaclass=Singleton):
             start_time (str): The time to start streaming from.
         """
         if start_time is None:
-            return self.df.iloc[self.row_ind].timestampcon
+            return self.dflist[0].iloc[self.row_ind].timestamp
         start_time = pd.Timestamp(start_time, tz='UTC')
         # remove timezone
         start_time = start_time.tz_localize(None)
-        if start_time <= self.df.iloc[0].timestamp:
+        if start_time <= self.dflist[0].iloc[0].timestamp:
             self.row_ind = 0
-        elif start_time >= self.df.iloc[-1].timestamp:
-            self.row_ind = self.df.loc[self.df.timestamp == self.df.iloc[-1].timestamp].index.min()
+        elif start_time >= self.dflist[0].iloc[-1].timestamp:
+            self.row_ind = self.dflist[0].loc[self.dflist[0].timestamp == self.dflist[0].iloc[-1].timestamp].index.min()
         else:
-            start_time_ind = self.df[self.df.timestamp < start_time].index.max() + 1
+            start_time_ind = self.dflist[0][self.dflist[0].timestamp < start_time].index.max() + 1
             self.row_ind = start_time_ind
-        return self.df.iloc[self.row_ind].timestamp
+        return self.dflist[0].iloc[self.row_ind].timestamp
         
             
 
@@ -87,7 +91,7 @@ def get_db_engine(db_name=None):
     Returns:
         engine (sqlalchemy.engine.base.Engine): SQLAlchemy engine object.
     """
-    config = load_config("conf/temp/config.yaml")["database"]
+    config = load_config("conf/config.yaml")["database"]
     db_user_enc = urllib.parse.quote_plus(config["user"])
     db_pass_enc = urllib.parse.quote_plus(config["password"])
     # traceback.print_exc()
@@ -163,6 +167,8 @@ def get_data(config):
     ids = config.get('IDS', None)
     start_time = config.get('START_TIME', None)
     db_table = config.get('DB_TABLE', None)
+    db_calories_table = config.get('DB_CALORIES_TABLE', None)
+    db_coordinates_table = config.get('DB_COORDINATES_TABLE', None)
     date_time_col = config.get('DATE_TIME_COL', None)
     db_name = config.get('DB_NAME', None)
     
@@ -173,7 +179,11 @@ def get_data(config):
     if data_type == 'DATABASE':
         # Fetching data from database table
         db_conn = get_db_engine(db_name)
-        return get_series_from_db(db_conn, table_name=db_table, ids=ids, start_time=start_time)
+        res = (get_series_from_db(db_conn, table_name=db_table, ids=ids, id_column='id', start_time=start_time),
+               get_series_from_db(db_conn, table_name=db_calories_table, ids=ids, id_column='id', start_time=start_time),
+               get_series_from_db(db_conn, table_name=db_coordinates_table, ids=ids, id_column='id', start_time=start_time))
+        return res
+
     elif data_type == 'CSV':
         # Fetching data from CSV file
         df = pd.read_csv(dataset_path)
@@ -207,6 +217,8 @@ def init_dataloader(inited=False,db_name=None,start_time=None):
             'IDS': get_ids(),
             'START_TIME': start_time,
             'DB_TABLE': DB_TABLE,
+            'DB_CALORIES_TABLE': DB_CALORIES_TABLE,
+            'DB_COORDINATES_TABLE': DB_COORDINATES_TABLE,
             'DATE_TIME_COL': DATE_TIME_COL,
             'DB_NAME': db_name
         }
@@ -276,10 +288,13 @@ def fetch_sensor_data():
     db_name = request.args.get('db_name')
     data_loader = init_dataloader(inited=data_loader_inited,db_name=db_name)
     data_loader_inited = True
-    rows = data_loader.get_next()
-    rows_with_strftime = rows.copy()
-    rows_dict = rows_with_strftime.to_dict('records')
-    resp = jsonify(rows_dict)
+    df_dict = data_loader.get_next()
+    res = {}
+    for key, rows in df_dict.items():
+        rows_with_strftime = rows.copy()
+        rows_dict = rows_with_strftime.to_dict('records')
+        res[key] = rows_dict
+    resp = jsonify(res)
     logger.debug(resp)
     return resp
 

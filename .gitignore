@@ -1,3 +1,6 @@
+# ignore notebooks
+*.ipynb
+
 # Don't state conf.py
 conf/
 tools/

@@ -289,6 +289,7 @@ def fetch_sensor_data():
     data_loader = init_dataloader(inited=data_loader_inited,db_name=db_name)
     data_loader_inited = True
     df_dict = data_loader.get_next()
+    print(df_dict)
     res = {}
     for key, rows in df_dict.items():
         rows_with_strftime = rows.copy()

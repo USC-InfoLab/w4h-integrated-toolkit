@@ -19,6 +19,8 @@ from script.import_hub_main import import_page
 import geopandas as gpd
 from shapely import wkb
 
+import os
+
 
 # ptvsd.enable_attach(address=('localhost', 5678))
 
@@ -1113,7 +1115,10 @@ def tutorial_page():
         config_file = st.file_uploader("Upload config file", type=['yaml', 'example','txt'])
         update_config = st.button("Update config")
         if config_file is not None and update_config:
-            with open('conf/config.yaml', 'w') as f:
+            conf_dir = 'conf'
+            if not os.path.exists(conf_dir):
+                os.makedirs(conf_dir)            
+            with open(f'{conf_dir}/config.yaml', 'w') as f:
                 # write content as string data into the file
                 f.write(config_file.getvalue().decode("utf-8"))
             st.success("Update success!")

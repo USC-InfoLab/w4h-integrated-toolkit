@@ -1,5 +1,5 @@
 database:
-  dbms: 'postgresql'
+  dbms: 'postgresql' or 'mysql'
   host: <hostname> # Replace with your DB host
   port: <port> # Replace with your DB port
   user: <username> # Replace with your DB username

@@ -1,6 +1,10 @@
 name: Build and push the docker image to DockerHub
 
-on: push
+on:
+  push:
+    branches:
+      - main
+      
 jobs:
   push_to_registry:
     name: Push the docker image to DockerHub

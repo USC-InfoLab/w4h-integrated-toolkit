@@ -17,6 +17,10 @@ import pydeck as pdk
 from script.nav import createNav
 from script.import_hub_main import import_page
 import geopandas as gpd
+from shapely import wkb
+
+import os
+
 
 # ptvsd.enable_attach(address=('localhost', 5678))
 
@@ -39,7 +43,7 @@ currentDbName = ""
 
 # get db engine
 def get_db_engine():
-    config = load_config("conf/temp/config.yaml")
+    config = load_config("conf/config.yaml")
     db_user_enc = urllib.parse.quote_plus(config["database"]["user"])
     db_pass_enc = urllib.parse.quote_plus(config["database"]["password"])
     return create_engine(f'postgresql://{db_user_enc}:{db_pass_enc}@{config["database"]["host"]}:{config["database"]["port"]}/{st.session_state["current_db"]}')
@@ -98,10 +102,12 @@ def get_data(session=None, real_time=False) -> pd.DataFrame:
     if real_time:
         response = requests.get(SERVER_URL,params={'db_name':st.session_state["current_db"]})
         data = response.json()
-        df_hrate = pd.DataFrame(data)
-        # df_hrate = pd.DataFrame(data['heart_rates'])
-        # df_calories = pd.DataFrame(data['calories'])
-        # df_coords = pd.DataFrame(data['coordinates'])
+        # df_hrate = pd.DataFrame(data)
+        df_hrate = pd.DataFrame(data['heart_rates'])
+        df_calories = pd.DataFrame(data['calories'])
+        df_coords = pd.DataFrame(data['coordinates'])
+        df_coords['value'] = df_coords['value'].apply(lambda x: wkb.loads(bytes.fromhex(x)))
+        df_coords = gpd.GeoDataFrame(df_coords, geometry='value')
         # df_hrate['timestamp'] = pd.to_datetime(df_hrate['timestamp'])
         # df_calories['timestamp'] = pd.to_datetime(df_calories['timestamp'])
         # df_coords['timestamp'] = pd.to_datetime(df_coords['timestamp'])
@@ -131,16 +137,6 @@ def get_data(session=None, real_time=False) -> pd.DataFrame:
     df_coords = df_coords.set_index('timestamp')
     return df_hrate, df_calories, df_coords
 
-
-def post_message_to_slack(text, blocks = None):
-    return requests.post('https://slack.com/api/chat.postMessage', {
-        'token': slack_token,
-        'channel': slack_channel,
-        'text': text,
-        'icon_emoji': slack_icon_emoji,
-        'username': slack_user_name,
-        'blocks': json.dumps(blocks) if blocks else None
-    }).json()
 
 
 def get_control_stats(df_hrate_all, df_calories_all, df_mets_all, control_ids):
@@ -321,6 +317,7 @@ def input_page(garmin_df):
     # preparing data
     user_ids = garmin_df.subj_id.tolist()
     rank_options = garmin_df['rank'].unique().tolist()
+    state_of_residence_options = garmin_df['state'].unique().tolist()
     drop_type_options = garmin_df['drop_type'].unique().tolist()
     weight_min, weight_max = int(garmin_df.weight.min()), int(garmin_df.weight.max())
     height_min, height_max = int(garmin_df.height.min()), int(garmin_df.height.max())
@@ -343,22 +340,33 @@ def input_page(garmin_df):
         
     selected_rank = []
     selected_drop_type = []
+    selected_state_of_residence = []
+    selected_state_of_residence_control = []
     selected_weight_range = []
     selected_height_range = []
     selected_age_range = []
     
     if subject_selection_type == 'attribute':
         st.subheader("Select Subject(s) Attributes")
-        col1, col2, col3, col4, col5 = st.columns(spec=[1, 3, 3, 3, 1], gap='large')
+        col1, col2, col3, col4 = st.columns(spec=[2, 3, 3, 3], gap='large')
+        # col1, col2, col3, col4, col5 = st.columns(spec=[1, 3, 3, 3, 1], gap='large')
         # add radio selector for gender
-        selected_rank = col1.multiselect(
-            "Select military rank",
-            options=rank_options,
-            key='subject rank',
-            # index=session.get('selected_rank', 0)
-            default=session.get('selected_rank', [])
+        # selected_rank = col1.multiselect(
+        #     "Select military rank",
+        #     options=rank_options,
+        #     key='subject rank',
+        #     # index=session.get('selected_rank', 0)
+        #     default=session.get('selected_rank', [])
+        #     )
+        # selected_rank = selected_rank if selected_rank else rank_options
+
+        selected_state_of_residence = col1.multiselect(
+            "Select state of residence",
+            options=state_of_residence_options,
+            key='subject state of residence',
+            default=session.get('selected_state_of_residence', [])
             )
-        selected_rank = selected_rank if selected_rank else rank_options
+        selected_state_of_residence = selected_state_of_residence if selected_state_of_residence else state_of_residence_options
 
         # add sliders for weight, height, age
         selected_age_range = col2.slider(
@@ -385,14 +393,14 @@ def input_page(garmin_df):
             value=session.get('selected_height_range', (height_min, height_max)),
             step=1,
             key='subject height')
-        
-        selected_drop_type = col5.multiselect(
-            "Select drop type",
-            options=drop_type_options,
-            key='drop type',
-            default=session.get('selected_drop_type', [])
-            )
-        selected_drop_type = selected_drop_type if selected_drop_type else drop_type_options
+
+        # selected_drop_type = col5.multiselect(
+        #     "Select drop type",
+        #     options=drop_type_options,
+        #     key='drop type',
+        #     default=session.get('selected_drop_type', [])
+        #     )
+        # selected_drop_type = selected_drop_type if selected_drop_type else drop_type_options
             
             
     # Selecting the control group
@@ -412,6 +420,7 @@ def input_page(garmin_df):
         )
         
     selected_rank_control = []
+    selected_state_of_residence_control = []
     selected_drop_type_control = []
     selected_weight_range_control = []
     selected_height_range_control = []
@@ -419,16 +428,24 @@ def input_page(garmin_df):
     
     if control_selection_type == 'attribute':
         st.subheader("Select Control Group Attributes")
-        col1, col2, col3, col4, col5 = st.columns(spec=[1, 3, 3, 3, 1], gap='large')
+        col1, col2, col3, col4 = st.columns(spec=[2, 3, 3, 3], gap='large')
+        # col1, col2, col3, col4, col5 = st.columns(spec=[1, 3, 3, 3, 1], gap='large')
         # add radio selector for gender
-        selected_rank_control = col1.multiselect(
-            "Select military rank",
-            options=rank_options,
-            key='control military rank',
-            # index=session.get('selected_rank_control', 0)
-            default=session.get('selected_rank_control', [])
+        # selected_rank_control = col1.multiselect(
+        #     "Select military rank",
+        #     options=rank_options,
+        #     key='control military rank',
+        #     # index=session.get('selected_rank_control', 0)
+        #     default=session.get('selected_rank_control', [])
+        #     )
+        # selected_rank_control = selected_rank_control if selected_rank_control else rank_options
+        selected_state_of_residence_control = col1.multiselect(
+            "Select state of residence",
+            options=state_of_residence_options,
+            key='control state of residence',
+            default=session.get('selected_state_of_residence_control', [])
             )
-        selected_rank_control = selected_rank_control if selected_rank_control else rank_options
+        selected_state_of_residence_control = selected_state_of_residence_control if selected_state_of_residence_control else state_of_residence_options
 
         # add sliders for weight, height, age
         selected_age_range_control = col2.slider(
@@ -454,15 +471,15 @@ def input_page(garmin_df):
             value=session.get('selected_height_range_control', (height_min, height_max)),
             step=1,
             key='control height')
-        
-        selected_drop_type_control = col5.multiselect(
-            "Select drop type",
-            options=drop_type_options,
-            key='control drop type',
-            # index=session.get('selected_rank_control', 0)
-            default=session.get('selected_drop_type_control', [])
-            )
-        selected_drop_type_control = selected_drop_type_control if selected_drop_type_control else drop_type_options
+
+        # selected_drop_type_control = col5.multiselect(
+        #     "Select drop type",
+        #     options=drop_type_options,
+        #     key='control drop type',
+        #     # index=session.get('selected_rank_control', 0)
+        #     default=session.get('selected_drop_type_control', [])
+        #     )
+        # selected_drop_type_control = selected_drop_type_control if selected_drop_type_control else drop_type_options
 
 
     st.header("Visualization/Analysis Configuration")
@@ -524,7 +541,7 @@ def input_page(garmin_df):
 
     if real_time_update:
         window_size = st.number_input('Window Size (seconds)', value=session.get("window_size", DEFAULT_WINDOW_SIZE), step=15)
-        TIMEOUT = st.number_input('Fast Forward (Every 1 Minute Equals How Many Seconds?)', value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
+        TIMEOUT = st.number_input('Fast Forward (Every 1 Hour Equals How Many Seconds?)', value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
     
 
         
@@ -547,10 +564,12 @@ def input_page(garmin_df):
         session["real_time_update"] = real_time_update
         session['subject_selection_type'] = 0 if subject_selection_type == 'id' else 1
         session['control_selection_type'] = 0 if control_selection_type == 'all' else 1 if control_selection_type == 'id' else 2
-        session['selected_rank'] = selected_rank
-        session['selected_rank_control'] = selected_rank_control
-        session['selected_drop_type'] = selected_drop_type
-        session['selected_drop_type_control'] = selected_drop_type_control
+        # session['selected_rank'] = selected_rank
+        # session['selected_rank_control'] = selected_rank_control
+        session['selected_state_of_residence'] = selected_state_of_residence
+        session['selected_state_of_residence_control'] = selected_state_of_residence_control
+        # session['selected_drop_type'] = selected_drop_type
+        # session['selected_drop_type_control'] = selected_drop_type_control
         session['selected_age_range'] = selected_age_range
         session['selected_age_range_control'] = selected_age_range_control
         session['selected_weight_range'] = selected_weight_range
@@ -566,7 +585,8 @@ def input_page(garmin_df):
         if subject_selection_type == 'id':
             subjects_df = garmin_df.query('subj_id in @selected_users')
         else:
-            subjects_df = garmin_df.query('rank == @selected_rank and drop_type == @selected_drop_type and weight >= @selected_weight_range[0] and weight <= @selected_weight_range[1] and height >= @selected_height_range[0] and height <= @selected_height_range[1] and age >= @selected_age_range[0] and age <= @selected_age_range[1]')
+            # subjects_df = garmin_df.query('rank == @selected_rank and drop_type == @selected_drop_type and weight >= @selected_weight_range[0] and weight <= @selected_weight_range[1] and height >= @selected_height_range[0] and height <= @selected_height_range[1] and age >= @selected_age_range[0] and age <= @selected_age_range[1]')
+            subjects_df = garmin_df.query('state in @selected_state_of_residence and weight >= @selected_weight_range[0] and weight <= @selected_weight_range[1] and height >= @selected_height_range[0] and height <= @selected_height_range[1] and age >= @selected_age_range[0] and age <= @selected_age_range[1]')
             
         # Filter the dataframe based on the selected criteria for control group
         if control_selection_type == 'all':
@@ -574,7 +594,8 @@ def input_page(garmin_df):
         elif control_selection_type == 'id':
             control_df = garmin_df.query('user_id in @selected_users_control')
         else:
-            control_df = garmin_df.query('rank == @selected_rank_control and drop_type == @selected_drop_type_control and weight >= @selected_weight_range_control[0] and weight <= @selected_weight_range_control[1] and height >= @selected_height_range_control[0] and height <= @selected_height_range_control[1] and age >= @selected_age_range_control[0] and age <= @selected_age_range_control[1]')
+            # control_df = garmin_df.query('rank == @selected_rank_control and drop_type == @selected_drop_type_control and weight >= @selected_weight_range_control[0] and weight <= @selected_weight_range_control[1] and height >= @selected_height_range_control[0] and height <= @selected_height_range_control[1] and age >= @selected_age_range_control[0] and age <= @selected_age_range_control[1]')
+            control_df = garmin_df.query('state in @selected_state_of_residence_control and weight >= @selected_weight_range_control[0] and weight <= @selected_weight_range_control[1] and height >= @selected_height_range_control[0] and height <= @selected_height_range_control[1] and age >= @selected_age_range_control[0] and age <= @selected_age_range_control[1]')
         
         # Store the filtered dataframe in session state
         session['subjects_df'] = subjects_df
@@ -1117,15 +1138,19 @@ def tutorial_page():
         config_file = st.file_uploader("Upload config file", type=['yaml', 'example','txt'])
         update_config = st.button("Update config")
         if config_file is not None and update_config:
-            with open('conf/config.yaml', 'wb') as f:
-                f.write(config_file.getvalue())
+            conf_dir = 'conf'
+            if not os.path.exists(conf_dir):
+                os.makedirs(conf_dir)            
+            with open(f'{conf_dir}/config.yaml', 'w') as f:
+                # write content as string data into the file
+                f.write(config_file.getvalue().decode("utf-8"))
             st.success("Update success!")
 
 
 
 def main():
     # dashboard title
-    st.title("Real-Time / Apple-Watch Heart-Rate Monitoring Dashboard")
+    st.title("W4H Integrated Toolkit")
     session = st.session_state
     createNav()
     
@@ -1150,7 +1175,8 @@ def main():
         if pre_current_db != session.get('current_db'):
             pre_current_db = session.get('current_db')
             updateCurrentDbByUsername(session.get("login-username"), session.get('current_db'))
-            del session['selected_users']
+            if 'selected_users' in session.keys():
+                del session['selected_users']
             st.experimental_rerun()
 
         if(session["current_db"] != ""):

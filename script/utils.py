@@ -47,8 +47,14 @@ def load_config(config_file: str) -> dict:
         except yaml.YAMLError as exc:
             print(exc)
 
-
-def get_db_engine(config_file: str='conf/config.yaml', db_name=None) -> sqlalchemy.engine.base.Engine:
+def getServerIdByNickname(config_file: str='conf/config.yaml', nickname='local db'):
+    config = load_config(config_file)
+    server_number = config['database_number']
+    for i in range(1,server_number+1):
+        if(config["database"+str(i)]['nickname'] == nickname):
+            return i
+    raise Exception("No such nickname: \""+nickname+"\"")
+def get_db_engine(config_file: str='conf/config.yaml',db_server_id = 1, db_server_nickname = None, db_name=None,mixed_db_name=None) -> sqlalchemy.engine.base.Engine:
     """Create a SQLAlchemy Engine instance based on the config file
 
     Args:
@@ -62,11 +68,20 @@ def get_db_engine(config_file: str='conf/config.yaml', db_name=None) -> sqlalche
     # load the configurations
     config = load_config(config_file=config_file)
     # Database connection configuration
-    dbms = config['database']['dbms']
-    db_host = config['database']['host']
-    db_port = config['database']['port']
-    db_user = config['database']['user']
-    db_pass = config['database']['password']
+    if mixed_db_name != None:
+        db_server_nickname = mixed_db_name.split("] ")[0][1:]
+        db_name = mixed_db_name.split("] ")[1]
+        print(mixed_db_name,"!")
+        print("server: ", db_server_nickname,"!")
+        print("db_name: ", db_name, "!")
+    if db_server_nickname != None:
+        db_server_id = getServerIdByNickname(nickname=db_server_nickname)
+    db_server = 'database'+str(db_server_id)
+    dbms = config[db_server]['dbms']
+    db_host = config[db_server]['host']
+    db_port = config[db_server]['port']
+    db_user = config[db_server]['user']
+    db_pass = config[db_server]['password']
     db_name = db_name if db_name else ''
 
     db_user_encoded = urllib.parse.quote_plus(db_user)
@@ -74,7 +89,8 @@ def get_db_engine(config_file: str='conf/config.yaml', db_name=None) -> sqlalche
 
     # creating SQLAlchemy Engine instance
     con_str = f'postgresql://{db_user_encoded}:{db_pass_encoded}@{db_host}:{db_port}/{db_name}'
-    db_engine = create_engine(con_str, echo=True, future=True)
+    print(con_str)
+    db_engine = create_engine(con_str, echo=True)
 
     return db_engine
 

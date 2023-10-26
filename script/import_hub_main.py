@@ -6,7 +6,7 @@ from fuzzywuzzy import process
 
 from script.utils import load_config
 
-from script.w4h_db_utils import create_w4h_instance, get_existing_databases, populate_tables, populate_subject_table
+from script.w4h_db_utils import create_w4h_instance, get_existing_databases, populate_tables, populate_subject_table,get_existing_database_server
 
 
 CONFIG_FILE = 'conf/config.yaml'
@@ -106,12 +106,18 @@ def import_page():
         
             
     elif database_option == db_selection_options[1]:
-        new_db_name = st.text_input("Enter new w4h database instance name")
+
+        col1, col2 = st.columns([2,5])
+        with col1:
+            selected_db_server = st.selectbox("**Select a database server**", get_existing_database_server()).split(' (')[0]
+        with col2:
+            new_db_name = st.text_input("Enter new w4h database instance name")
         if st.button("Create"):
             # Here, implement logic to create the new database with the name new_db_name.
-            create_w4h_instance(new_db_name, config_path)  # This function needs to be implemented.
+            print(selected_db_server)
+            create_w4h_instance(selected_db_server, new_db_name, config_path)  # This function needs to be implemented.
             st.success(f"Database '{new_db_name}' created!")
-            selected_db = new_db_name
+            selected_db = "[" + selected_db_server + "] " + new_db_name
             
 
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv")

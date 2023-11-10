@@ -1,3 +1,5 @@
+# Don't stage database for login
+user.db
 # Don't stage notebooks
 *.ipynb
 

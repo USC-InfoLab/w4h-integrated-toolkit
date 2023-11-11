@@ -1,9 +1,21 @@
-database:
+database_number: 1
+
+database1:
+  nickname: 'local db' # will shows in the selectbox
   dbms: 'postgresql'
-  host: <hostname> # Replace with your DB host
-  port: <port> # Replace with your DB port
-  user: <username> # Replace with your DB username
-  password: <password> # Replace with your DB password
+  host: 'db' # Replace with your DB host
+  port: 5432 # Replace with your DB port
+  user: 'admin' # Replace with your DB username
+  password: 'admin'
+
+#database2:
+#  nickname: <your nick name>
+#  dbms: <db's system>
+#  host: <db host>
+#  port: <db port>
+#  user: <db username>
+#  password: <password>
+
 
 
 mapping:

@@ -18,6 +18,7 @@ from script.nav import createNav
 from script.import_hub_main import import_page
 import geopandas as gpd
 from shapely import wkb
+from script.utils import get_db_engine
 
 import os
 
@@ -42,11 +43,11 @@ currentDbName = ""
 
 
 # get db engine
-def get_db_engine():
-    config = load_config("conf/config.yaml")
-    db_user_enc = urllib.parse.quote_plus(config["database"]["user"])
-    db_pass_enc = urllib.parse.quote_plus(config["database"]["password"])
-    return create_engine(f'postgresql://{db_user_enc}:{db_pass_enc}@{config["database"]["host"]}:{config["database"]["port"]}/{st.session_state["current_db"]}')
+# def get_db_engine():
+#     config = load_config("conf/config.yaml")
+#     db_user_enc = urllib.parse.quote_plus(config["database"]["user"])
+#     db_pass_enc = urllib.parse.quote_plus(config["database"]["password"])
+#     return create_engine(f'postgresql://{db_user_enc}:{db_pass_enc}@{config["database"]["host"]}:{config["database"]["port"]}/{st.session_state["current_db"]}')
 
 # get user ids
 def get_garmin_user_id(db_conn, pattern=None):
@@ -118,7 +119,7 @@ def get_data(session=None, real_time=False) -> pd.DataFrame:
     else:
         start_date = session.get('start_date')
         end_date = session.get('end_date')
-        db_conn = get_db_engine()
+        db_conn = get_db_engine(mixed_db_name=session["current_db"])
         # query heart rate
         df_hrate = pd.read_sql(f"SELECT * FROM {DB_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)", db_conn, params=[start_date, end_date])
         df_hrate.sort_values(by=['timestamp'], inplace=True)
@@ -317,7 +318,7 @@ def input_page(garmin_df):
     # preparing data
     user_ids = garmin_df.subj_id.tolist()
     rank_options = garmin_df['rank'].unique().tolist()
-    state_of_residence_options = garmin_df['state'].unique().tolist() 
+    state_of_residence_options = garmin_df['state'].unique().tolist()
     drop_type_options = garmin_df['drop_type'].unique().tolist()
     weight_min, weight_max = int(garmin_df.weight.min()), int(garmin_df.weight.max())
     height_min, height_max = int(garmin_df.height.min()), int(garmin_df.height.max())
@@ -393,7 +394,7 @@ def input_page(garmin_df):
             value=session.get('selected_height_range', (height_min, height_max)),
             step=1,
             key='subject height')
-        
+
         # selected_drop_type = col5.multiselect(
         #     "Select drop type",
         #     options=drop_type_options,
@@ -471,7 +472,7 @@ def input_page(garmin_df):
             value=session.get('selected_height_range_control', (height_min, height_max)),
             step=1,
             key='control height')
-        
+
         # selected_drop_type_control = col5.multiselect(
         #     "Select drop type",
         #     options=drop_type_options,
@@ -1132,7 +1133,6 @@ def tutorial_page():
     elif page == "How to start":
         with open('markdown/how_to_start.md', 'r', encoding='utf-8') as markdown_file:
             markdown_text = markdown_file.read()
-    # 显示Markdown内容
     st.markdown(markdown_text, unsafe_allow_html=True)
     if page == "Setting up":
         config_file = st.file_uploader("Upload config file", type=['yaml', 'example','txt'])
@@ -1176,11 +1176,11 @@ def main():
             pre_current_db = session.get('current_db')
             updateCurrentDbByUsername(session.get("login-username"), session.get('current_db'))
             if 'selected_users' in session.keys():
-                del session['selected_users'] 
+                del session['selected_users']
             st.experimental_rerun()
 
         if(session["current_db"] != ""):
-            garmin_df = get_garmin_df(get_db_engine())
+            garmin_df = get_garmin_df(get_db_engine(mixed_db_name=session["current_db"]))
             garmin_df.age = garmin_df.age.astype(int)
             garmin_df.weight = garmin_df.weight.astype(int)
             garmin_df.height = garmin_df.height.astype(int)

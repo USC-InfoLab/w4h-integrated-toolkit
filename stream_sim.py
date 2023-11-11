@@ -5,7 +5,7 @@ from loguru import logger
 import urllib.parse
 
 from script.conf import *
-from script.utils import Singleton, load_config
+from script.utils import Singleton, load_config, get_db_engine
 
 data_loader_inited = False
 
@@ -84,18 +84,18 @@ class DataLoader(metaclass=Singleton):
         
             
 
-def get_db_engine(db_name=None):
-    """
-    Returns a SQLAlchemy engine for connecting to the database.
-
-    Returns:
-        engine (sqlalchemy.engine.base.Engine): SQLAlchemy engine object.
-    """
-    config = load_config("conf/config.yaml")["database"]
-    db_user_enc = urllib.parse.quote_plus(config["user"])
-    db_pass_enc = urllib.parse.quote_plus(config["password"])
-    # traceback.print_exc()
-    return create_engine(f'{config["dbms"]}://{db_user_enc}:{db_pass_enc}@{config["host"]}:{config["port"]}/{db_name}')
+# def get_db_engine(db_name=None):
+#     """
+#     Returns a SQLAlchemy engine for connecting to the database.
+#
+#     Returns:
+#         engine (sqlalchemy.engine.base.Engine): SQLAlchemy engine object.
+#     """
+#     config = load_config("conf/config.yaml")["database"]
+#     db_user_enc = urllib.parse.quote_plus(config["user"])
+#     db_pass_enc = urllib.parse.quote_plus(config["password"])
+#     # traceback.print_exc()
+#     return create_engine(f'{config["dbms"]}://{db_user_enc}:{db_pass_enc}@{config["host"]}:{config["port"]}/{db_name}')
 
 
 def get_query_result(query, db_conn, params=[]):
@@ -167,6 +167,7 @@ def get_data(config):
     ids = config.get('IDS', None)
     start_time = config.get('START_TIME', None)
     db_table = config.get('DB_TABLE', None)
+
     db_calories_table = config.get('DB_CALORIES_TABLE', None)
     db_coordinates_table = config.get('DB_COORDINATES_TABLE', None)
     date_time_col = config.get('DATE_TIME_COL', None)
@@ -178,7 +179,7 @@ def get_data(config):
         raise ValueError('DATA_TYPE must be either DATABASE or CSV.')
     if data_type == 'DATABASE':
         # Fetching data from database table
-        db_conn = get_db_engine(db_name)
+        db_conn = get_db_engine(mixed_db_name=db_name)
         res = (get_series_from_db(db_conn, table_name=db_table, ids=ids, id_column='id', start_time=start_time),
                get_series_from_db(db_conn, table_name=db_calories_table, ids=ids, id_column='id', start_time=start_time),
                get_series_from_db(db_conn, table_name=db_coordinates_table, ids=ids, id_column='id', start_time=start_time))

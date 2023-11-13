@@ -38,4 +38,6 @@ def createNav():
         st.session_state["page"] = "result"
         st.experimental_rerun()
     if(tutorial):
-        webbrowser.open_new_tab('https://chickensellerred.github.io/')
+        # webbrowser.open_new_tab('https://chickensellerred.github.io/')
+        st.session_state["page"] = "tutorial"
+        st.experimental_rerun()

@@ -1,6 +1,8 @@
 import datetime
 import os
 import sqlite3
+import json
+import pickle
 
 from loguru import logger
 import pandas as pd
@@ -224,7 +226,6 @@ def populate_subject_table(df: pd.DataFrame, db_name: str, config_path='conf/con
     engine.dispose()
 
 def getCurrentDbByUsername(username):
-    print(os.getcwd())
     with sqlite3.connect('user.db') as conn:
         cursor = conn.cursor()
         cursor.execute('''select current_db from users where username = ?''',(username,))
@@ -236,3 +237,28 @@ def updateCurrentDbByUsername(username,currentDb):
         cursor = conn.cursor()
         cursor.execute('''update users set current_db = ? where username = ?''',(currentDb,username,))
         conn.commit()
+
+def saveSessionByUsername(session):
+    with sqlite3.connect('user.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('''select query_history from users where username = ?''',(session.get('login-username'),))
+        result = cursor.fetchone()
+        conn.commit()
+    query_history = pickle.loads(result[0])
+    print("history:",query_history[0].get('selected_users'))
+    query_history.append(session)
+    serialized_object = pickle.dumps(query_history)
+
+    with sqlite3.connect('user.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('''UPDATE users SET query_history = ? WHERE username = ?''', (serialized_object,session['login-username'],))
+        conn.commit()
+
+def getSessionByUsername(username):
+    with sqlite3.connect('user.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('''select query_history from users where username = ?''',(username,))
+        result = cursor.fetchone()
+        conn.commit()
+
+    return pickle.loads(result[0])

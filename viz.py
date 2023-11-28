@@ -18,7 +18,7 @@ from script.nav import createNav
 from script.import_hub_main import import_page
 import geopandas as gpd
 from shapely import wkb
-from script.utils import get_db_engine
+from script.utils import get_db_engine, parse_query
 
 import os
 
@@ -323,6 +323,50 @@ def input_page(garmin_df):
     weight_min, weight_max = int(garmin_df.weight.min()), int(garmin_df.weight.max())
     height_min, height_max = int(garmin_df.height.min()), int(garmin_df.height.max())
     age_min, age_max = int(garmin_df.age.min()), int(garmin_df.age.max())
+
+
+
+
+
+    default_values = {
+        'selected_users': [],
+        'selected_state_of_residence': state_of_residence_options,
+        'selected_age_range': (age_min, age_max),
+        'selected_weight_range': (weight_min, weight_max),
+        'selected_height_range': (height_min, height_max),
+        'selected_users_control': [],
+        'selected_state_of_residence_control': state_of_residence_options,
+        'selected_age_range_control': (age_min, age_max),
+        'selected_weight_range_control': (weight_min, weight_max),
+        'selected_height_range_control': (height_min, height_max),
+        'start_date': datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d'),
+        'end_date': datetime.datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d'),
+        # 'num_time_ranges': 3,
+        # 'time_ranges': [
+        #     (datetime.time(6, 45), datetime.time(9, 30)),
+        #     (datetime.time(12, 30), datetime.time(16, 0)),
+        #     (datetime.time(20, 0), datetime.time(4, 45))
+        # ]
+    }
+
+    # User-provided prompt
+    if prompt := st.chat_input(disabled=not os.environ['OPENAI_API_KEY'], placeholder="Need AI Assistance? Type your prompt here."):
+        st.session_state.messages = st.session_state.messages if 'messages' in st.session_state else []
+        st.session_state.messages.append(prompt)
+        query_dict = parse_query(prompt, default_values)
+        for k, v in query_dict.items():
+            if 'date' in k:
+                v = dt.strptime(v, '%Y-%m-%d')
+            st.session_state[k] = v
+        if query_dict['selected_users'] == []:
+            session.subject_selection_type = 1
+        else :
+            session.subject_selection_type = 0
+        if query_dict['selected_users_control'] == []:
+            session.control_selection_type = 2
+        else:
+            session.control_selection_type = 1
+
         
     # top-level filters
     
@@ -527,6 +571,8 @@ def input_page(garmin_df):
                     # st.divider()
                 time_ranges = updated_ranges
                 time_ranges_labels = updated_range_labels
+
+
     else:
         col1, col2 = st.columns(2)
         with col1:
@@ -710,7 +756,7 @@ def results_page():
         if user_id_dtype == np.int64:
             user_id_dtype = int
         # else if string
-        elif user_id_dtype == np.object:
+        elif user_id_dtype == object:
             user_id_dtype = str
         # cast subject ids and control ids to the same dtype as df_hrate dtype
         subject_ids = [user_id_dtype(item) for item in subject_ids]

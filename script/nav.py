@@ -1,6 +1,8 @@
 import streamlit as st
 
 import streamlit as st
+import webbrowser
+
 
 def createNav():
     # Using object notation
@@ -16,12 +18,15 @@ def createNav():
 
     inputPage = st.sidebar.button("Input Page",use_container_width=True,type="secondary")
     resultPage = st.sidebar.button("Result Page",use_container_width=True,type="secondary")
+    queryHistory = st.sidebar.button("Query History",use_container_width=True,type="secondary")
 
     st.sidebar.divider()
     st.sidebar.caption("Tutorial")
     tutorial = st.sidebar.button("How to Start",use_container_width=True,type="secondary")
 
     if (loginPage):
+        if(isLogin):
+            st.session_state["login-state"] = False
         st.session_state["page"] = "login"
         st.experimental_rerun()
     if (importPage):
@@ -33,6 +38,11 @@ def createNav():
     if(resultPage):
         st.session_state["page"] = "result"
         st.experimental_rerun()
+    if(queryHistory):
+        st.session_state["page"] = "query_history"
+        st.experimental_rerun()
+
     if(tutorial):
+        # webbrowser.open_new_tab('https://chickensellerred.github.io/')
         st.session_state["page"] = "tutorial"
         st.experimental_rerun()

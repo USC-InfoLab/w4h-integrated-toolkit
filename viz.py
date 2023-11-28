@@ -1,5 +1,6 @@
 import hashlib
 import traceback
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -601,9 +602,13 @@ def input_page(garmin_df):
         # Store the filtered dataframe in session state
         session['subjects_df'] = subjects_df
         session['control_df'] = control_df
-        
+
+        session_copy = session
+        saveSessionByUsername(session_copy)
+
         # Go to the results page
         session['page'] = "results"
+
         st.experimental_rerun()
 
 
@@ -615,7 +620,7 @@ def results_page():
         st.error("Please use the inputs page first.")
         return
     
-   
+    print('result page!')
     subjects_df = session.get('subjects_df')
     subject_ids = subjects_df.subj_id.tolist()
     control_df = session.get('control_df')
@@ -1124,27 +1129,47 @@ def login_page():
             st.error("something wrong in the server")
         conn.close()
 
-def tutorial_page():
-    page = st.selectbox("Select a tutorial", ["Setting up", "How to start"])
+def query_history_page():
+    session = st.session_state
+    username = session.get('login-username')
+    query_history = getSessionByUsername(username)
+    # print("query history:",query_history)
+    for i, item in enumerate(query_history):
+        if(i == 1):
+            break
+        button_label = f"{item.get('selected_users')[0]} : from {item.get('start_date')} to {item.get('end_date')}"
+        if st.button(button_label):
+            session = item;
+            session['page'] = "results"
+            st.experimental_rerun()
+                # st.write(f"Clicked on {button_label}, corresponding array item: {item}")
+    st.markdown('Query History')
 
-    if page == "Setting up":
-        with open('markdown/setting_up.md', 'r', encoding='utf-8') as markdown_file:
-            markdown_text = markdown_file.read()
-    elif page == "How to start":
-        with open('markdown/how_to_start.md', 'r', encoding='utf-8') as markdown_file:
-            markdown_text = markdown_file.read()
-    st.markdown(markdown_text, unsafe_allow_html=True)
-    if page == "Setting up":
-        config_file = st.file_uploader("Upload config file", type=['yaml', 'example','txt'])
-        update_config = st.button("Update config")
-        if config_file is not None and update_config:
-            conf_dir = 'conf'
-            if not os.path.exists(conf_dir):
-                os.makedirs(conf_dir)            
-            with open(f'{conf_dir}/config.yaml', 'w') as f:
-                # write content as string data into the file
-                f.write(config_file.getvalue().decode("utf-8"))
-            st.success("Update success!")
+
+
+def tutorial_page():
+    st.markdown('Build your config file from here:  ')
+    st.markdown('[Tutorial](https://chickensellerred.github.io/)')
+    st.markdown('Then upload here:  ')
+    #
+    # if page == "Setting up":
+    #     with open('markdown/setting_up.md', 'r', encoding='utf-8') as markdown_file:
+    #         markdown_text = markdown_file.read()
+    # elif page == "How to start":
+    #     with open('markdown/how_to_start.md', 'r', encoding='utf-8') as markdown_file:
+    #         markdown_text = markdown_file.read()
+    # st.markdown(markdown_text, unsafe_allow_html=True)
+    # if page == "Setting up":
+    config_file = st.file_uploader("Upload config file", type=['yaml', 'example','txt'])
+    update_config = st.button("Update config")
+    if config_file is not None and update_config:
+        conf_dir = 'conf'
+        if not os.path.exists(conf_dir):
+            os.makedirs(conf_dir)
+        with open(f'{conf_dir}/config.yaml', 'w') as f:
+            # write content as string data into the file
+            f.write(config_file.getvalue().decode("utf-8"))
+        st.success("Update success!")
 
 
 
@@ -1189,6 +1214,8 @@ def main():
         import_page()
     elif session.get("page") == "results":
         results_page()
+    elif session.get("page") == "query_history":
+        query_history_page()
 
 
 if __name__ == '__main__':

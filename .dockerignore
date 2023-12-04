@@ -1,7 +1,6 @@
 venv/
-.vscide/
+.github/
 .git/
-.idea/
 __pycache__
 user.db
 tools

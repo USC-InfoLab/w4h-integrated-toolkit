@@ -1,18 +1,12 @@
 database_number: 1
 
 database1:
-#  nickname: 'local db'
-#  dbms: 'postgresql'
-#  host: 'db' # Replace with your DB host
-#  port: 5432 # Replace with your DB port
-#  user: 'admin' # Replace with your DB username
-#  password: 'admin'# Replace with your DB password
-  nickname: 'gcp'
+  nickname: 'local db' # will shows in the selectbox
   dbms: 'postgresql'
-  host: '35.235.95.37' # Replace with your DB host
-  port: 5439 # Replace with your DB port
-  user: 'jize' # Replace with your DB username
-  password: 'jz@uscdash23' # Replace with your DB password
+  host: 'db' # Replace with your DB host
+  port: 5432 # Replace with your DB port
+  user: 'admin' # Replace with your DB username
+  password: 'admin'
 
 mapping:
   columns:

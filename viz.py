@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import traceback
 import pickle
@@ -19,6 +20,8 @@ from script.nav import createNav
 from script.import_hub_main import import_page
 import geopandas as gpd
 from shapely import wkb
+
+from script.query_history import query_history
 from script.utils import get_db_engine
 
 import os
@@ -603,14 +606,15 @@ def input_page(garmin_df):
         session['subjects_df'] = subjects_df
         session['control_df'] = control_df
 
-        session_copy = session
-        saveSessionByUsername(session_copy)
+        q = query_history(session)
+        print('q:qqqq: ',q)
+        getQueryHistoryByUsername(q.data['login-username'])
+        saveQueryHistoryByUsername(q)
 
         # Go to the results page
         session['page'] = "results"
 
         st.experimental_rerun()
-
 
 # Define the results page
 def results_page():
@@ -1131,20 +1135,27 @@ def login_page():
 
 def query_history_page():
     session = st.session_state
-    username = session.get('login-username')
-    query_history = getSessionByUsername(username)
-    # print("query history:",query_history)
-    for i, item in enumerate(query_history):
-        if(i == 1):
-            break
-        button_label = f"{item.get('selected_users')[0]} : from {item.get('start_date')} to {item.get('end_date')}"
-        if st.button(button_label):
-            session = item;
-            session['page'] = "results"
-            st.experimental_rerun()
-                # st.write(f"Clicked on {button_label}, corresponding array item: {item}")
     st.markdown('Query History')
+    username = session.get('login-username')
+    query_history = getQueryHistoryByUsername(username)
 
+    st.write(f"Total {len(query_history)} queries")
+    for i, query in enumerate(query_history):
+        keys_list = list(query.data.keys())
+        button_label = f"{query.get('selected_users')} :  {query.get('start_date')} ~ {query.get('end_date')}"
+        with st.expander(button_label, expanded=False):
+
+            if st.button('query again', key=f'query again {i}'):
+                query.setSession(session)
+                session['page'] = "results"
+                st.experimental_rerun()
+            for key in keys_list:
+                if(key.startswith('df_') or key.endswith('_df')):
+                    continue
+                st.markdown(f"<font color='gray' size='2'>{key} : {query.data.get(key)}</font>",
+                                unsafe_allow_html=True)
+
+                # st.write(f"{key} : {query.data.get(key)}")
 
 
 def tutorial_page():

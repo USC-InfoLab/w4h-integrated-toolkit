@@ -1,3 +1,5 @@
+
+import copy
 import hashlib
 import traceback
 import pickle
@@ -19,6 +21,9 @@ from script.nav import createNav
 from script.import_hub_main import import_page
 import geopandas as gpd
 from shapely import wkb
+
+
+from script.query_history import query_history
 from script.utils import get_db_engine
 
 import os
@@ -76,13 +81,35 @@ def get_garmin_df(db_conn, pattern=None):
 
 
 def calculate_mets(cal_df, user_weights=None):
-    if not user_weights:
+    if not user_weights or len(user_weights)==0 :
         print('no user weights provided, using default')
         user_weights = dict(zip(cal_df.user_id.unique(), np.ones(cal_df.user_id.nunique()) * 70))
     mets_df = cal_df.copy()
-    mets_df['value'] = mets_df.apply(lambda x: x['value'] / (user_weights[x['user_id']] * 0.25), axis=1)
+    mets_df['value'] = mets_df['value']* 4.186
 
-    return mets_df
+    mets_df['value'] = mets_df.apply(lambda x: x['value'] / (user_weights[x['user_id']]), axis=1)
+
+    grouped = mets_df.groupby('user_id')
+
+    # 初始化一个空的 DataFrame 用于存放处理后的数据
+    calibrated_df = pd.DataFrame()
+    for name, group in grouped:
+        # st.write(name)
+        # st.write(group.index[0])
+        group['datetime'] = pd.to_datetime(group.index)
+        # 对每个用户的 mets 列进行校准，基准值设为1
+        baseline = 1.00 / group['value'].mean()
+        group['value'] = group['value'] * baseline
+
+        group['days_since_start'] = (group.datetime - group.datetime.iloc[0]).dt.total_seconds() / (24 * 3600)
+        group['value'] = np.where(group['days_since_start'].diff().shift(-1) > 0.5, None, group['value'])
+
+        # 将处理后的数据添加到新的 DataFrame
+        calibrated_df = pd.concat([calibrated_df, group])
+
+    # 如果需要，可以重置索引
+    calibrated_df.reset_index(drop=True, inplace=True)
+    return calibrated_df
     # return pd.DataFrame(columns=['user_id', 'timestamp', 'value'])
 
 
@@ -603,14 +630,16 @@ def input_page(garmin_df):
         session['subjects_df'] = subjects_df
         session['control_df'] = control_df
 
-        session_copy = session
-        saveSessionByUsername(session_copy)
+
+        q = query_history(session)
+        # print('q:qqqq: ',q)
+        getQueryHistoryByUsername(q.data['login-username'])
+        saveQueryHistoryByUsername(q)
 
         # Go to the results page
         session['page'] = "results"
 
         st.experimental_rerun()
-
 
 # Define the results page
 def results_page():
@@ -619,8 +648,7 @@ def results_page():
     if session is None:
         st.error("Please use the inputs page first.")
         return
-    
-    print('result page!')
+
     subjects_df = session.get('subjects_df')
     subject_ids = subjects_df.subj_id.tolist()
     control_df = session.get('control_df')
@@ -702,13 +730,14 @@ def results_page():
         df_coords_full = st.session_state['df_coords_full']
         new_hrates, new_calories, new_coords = get_data(session=session, real_time=real_time_update)
         df_hrate_full = pd.concat([df_hrate_full, new_hrates]) if real_time_update else new_hrates
+
         df_calories_full = pd.concat([df_calories_full, new_calories]) if real_time_update else new_calories
         df_coords_full = pd.concat([df_coords_full, new_coords]) if real_time_update else new_coords
         st.session_state['df_hrate_full'] = df_hrate_full
         st.session_state['df_calories_full'] = df_calories_full
         st.session_state['df_coords_full'] = df_coords_full
         df_mets_full = calculate_mets(df_calories_full)
-        
+        # print('df_mets_full: ',df_mets_full)
         # filtering data
         # fix subject ids dtype
         user_id_dtype = df_hrate_full.user_id.dtype
@@ -721,10 +750,12 @@ def results_page():
         subject_ids = [user_id_dtype(item) for item in subject_ids]
         control_ids = [user_id_dtype(item) for item in control_ids]
         df_hrate = df_hrate_full.loc[df_hrate_full['user_id'].isin(subject_ids)]
+
         df_calories = df_calories_full.loc[df_calories_full['user_id'].isin(subject_ids)]
         df_coords = df_coords_full.loc[df_coords_full['user_id'].isin(subject_ids)]
         df_mets = df_mets_full.loc[df_mets_full['user_id'].isin(subject_ids)]
-        
+
+
         # creating KPIs
         avg_heart_rate = df_hrate['value'].mean()
         min_heart_rate = df_hrate['value'].min()
@@ -776,8 +807,8 @@ def results_page():
         for user_id in df_coords["user_id"].unique():
             user_data = df_coords[df_coords["user_id"] == user_id]
             df = pd.DataFrame(columns=['coordinates', 'width'])
-            dict = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
-            df = df.append(dict,ignore_index=True)
+            tem_dict = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
+            df = df.append(tem_dict,ignore_index=True)
             layers += create_layer(df, color_lookup[user_id])
             # user_trajectories[user_id] = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
 
@@ -885,6 +916,7 @@ def results_page():
             fig_hrate = go.Figure()
             fig_calories = go.Figure()
             fig_mets = go.Figure()
+            fig_aligned_mets = go.Figure()
 
             
             grouped_df_hrate = df_hrate.groupby('user_id')
@@ -899,6 +931,8 @@ def results_page():
             # plot calories for each user
             grouped_df_calories = df_calories.groupby('user_id')
             for user_id, group in grouped_df_calories:
+                group['datetime'] = pd.to_datetime(group.index)
+                group['value'] = np.where(group['datetime'].diff().shift(-1) > timedelta(hours=2), None, group['value'])
                 fig_calories.add_scatter(x=group.index, y=group['value'], name=f'user_id: {user_id}')
             fig_calories.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
             # add_aux_rectangles(fig_calories, df_calories, df_calories_full, window_start_time, window_end_time, real_time=real_time_update)
@@ -907,9 +941,34 @@ def results_page():
             grouped_df_mets = df_mets.groupby('user_id')
             for user_id, group in grouped_df_mets:
                 fig_mets.add_scatter(x=group.index, y=group['value'], name=f'user_id: {user_id}')
+
             fig_mets.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
 
-            
+
+            # plot aligned mets for each user
+            # print('df_mets_full: ',df_mets_full)
+            # print('df_mets: ',df_mets)
+            # st.write('df_mets_full')
+            # st.write(df_mets_full)
+            # st.write('df_mets')
+            # st.write(df_mets)
+            for user_id, group in grouped_df_mets:
+                # st.write(user_id)
+                # st.write(group)
+                fig_aligned_mets.add_scatter(x=group.days_since_start, y=group['value'], name=f'user_id: {user_id}')
+            fig_aligned_mets.update_layout(
+                xaxis=dict(
+                    rangeslider=dict(
+                        visible=True
+                    ),
+                    tickformat=".2f",
+                    title="Days (Decimal)",
+                    # type="date"
+                ),
+                title='METS with available days',
+                yaxis_title='Mets'
+            )
+
             st.markdown("### Heart-Rate Plot")
             # st.write(fig_hrate)
             st.plotly_chart(fig_hrate, use_container_width=True)
@@ -920,6 +979,9 @@ def results_page():
                 st.markdown("#### METs plot")
                 # st.write(fig_mets)
                 st.plotly_chart(fig_mets, use_container_width=True)
+                st.markdown("#### Aligned METs plot")
+                # st.write(fig_aligned_mets)
+                st.plotly_chart(fig_aligned_mets, use_container_width=True)
             
             # st.line_chart(df['value'])
             # add barcharts to compare mean features to the global mean stats
@@ -1131,20 +1193,28 @@ def login_page():
 
 def query_history_page():
     session = st.session_state
-    username = session.get('login-username')
-    query_history = getSessionByUsername(username)
-    # print("query history:",query_history)
-    for i, item in enumerate(query_history):
-        if(i == 1):
-            break
-        button_label = f"{item.get('selected_users')[0]} : from {item.get('start_date')} to {item.get('end_date')}"
-        if st.button(button_label):
-            session = item;
-            session['page'] = "results"
-            st.experimental_rerun()
-                # st.write(f"Clicked on {button_label}, corresponding array item: {item}")
-    st.markdown('Query History')
 
+    st.markdown('Query History')
+    username = session.get('login-username')
+    query_history = getQueryHistoryByUsername(username)
+
+    st.write(f"Total {len(query_history)} queries")
+    for i, query in enumerate(query_history):
+        keys_list = list(query.data.keys())
+        button_label = f"{query.get('selected_users')} :  {query.get('start_date')} ~ {query.get('end_date')}"
+        with st.expander(button_label, expanded=False):
+
+            if st.button('query again', key=f'query again {i}'):
+                query.setSession(session)
+                session['page'] = "results"
+                st.experimental_rerun()
+            for key in keys_list:
+                if(key.startswith('df_') or key.endswith('_df')):
+                    continue
+                st.markdown(f"<font color='gray' size='2'>{key} : {query.data.get(key)}</font>",
+                                unsafe_allow_html=True)
+
+                # st.write(f"{key} : {query.data.get(key)}")
 
 
 def tutorial_page():

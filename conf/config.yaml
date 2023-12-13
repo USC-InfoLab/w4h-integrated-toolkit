@@ -1,0 +1,31 @@
+database_number: 1
+
+database1:
+  nickname: 'Google cloud'
+  dbms: 'postgresql'
+  host: '35.235.95.37' # '35.235.95.37' # Replace with your DB host
+  port: 5439 # 5439 # Replace with your DB port
+  user: 'jize'# 'jize' # Replace with your DB username
+
+mapping:
+  columns:
+    user_id: 'user_id'
+    timestamp: 'timestamp'
+    value: 'value'
+  tables:
+    user_table:
+      name: 'geomts_users'
+      columns:
+        user_id: String(50)
+        device: String(50)
+        location: String(50)
+    time_series:
+      - heart_rates
+      - calories
+      - mets
+      - distances
+      - steps
+      - sleep
+      - weight
+    geo:
+      - locations

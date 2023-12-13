@@ -253,11 +253,28 @@ def saveSessionByUsername(session):
         cursor.execute('''UPDATE users SET query_history = ? WHERE username = ?''', (serialized_object,session['login-username'],))
         conn.commit()
 
-def getSessionByUsername(username):
+
+def saveQueryHistoryByUsername(queryHistory):
+    with sqlite3.connect('user.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('''select query_history from users where username = ?''',(queryHistory.data.get('login-username'),))
+        result = cursor.fetchone()
+        conn.commit()
+    historys = pickle.loads(result[0])
+    historys.append(queryHistory)
+    serialized_object = pickle.dumps(historys)
+
+    with sqlite3.connect('user.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('''UPDATE users SET query_history = ? WHERE username = ?''', (serialized_object,queryHistory.data['login-username'],))
+        conn.commit()
+
+def getQueryHistoryByUsername(username):
     with sqlite3.connect('user.db') as conn:
         cursor = conn.cursor()
         cursor.execute('''select query_history from users where username = ?''',(username,))
         result = cursor.fetchone()
         conn.commit()
 
-    return pickle.loads(result[0])
+    query_history = pickle.loads(result[0])
+    return query_history

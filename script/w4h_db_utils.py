@@ -245,7 +245,7 @@ def saveSessionByUsername(session):
         result = cursor.fetchone()
         conn.commit()
     query_history = pickle.loads(result[0])
-    print("history:",query_history[0].get('selected_users'))
+    # print("history:",query_history[0].get('selected_users'))
     query_history.append(session)
     serialized_object = pickle.dumps(query_history)
 

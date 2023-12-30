@@ -7,10 +7,9 @@ user.db
 .vscode/
 .idea/
 
-# Don't state conf.py
-conf/
+
+conf/temp
 tools/
-config.yaml
 
 # Don't stages dataset
 *.csv

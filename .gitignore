@@ -9,6 +9,7 @@ user.db
 
 
 conf/temp
+conf/config.yaml
 tools/
 
 # Don't stages dataset

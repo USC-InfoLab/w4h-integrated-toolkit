@@ -295,389 +295,70 @@ def create_layer(df, color):
     return [layer, marker_layer_start, marker_layer_end]
 
 
-# Define the input page
-def input_page(garmin_df):
-    global TIMEOUT
-    # Get the session state
-    session = st.session_state
-    if session is None:
-        st.error("Please run the app first.")
-        return
 
-    # preparing data
-    user_ids = garmin_df.subj_id.tolist()
-    rank_options = garmin_df['rank'].unique().tolist()
-    state_of_residence_options = garmin_df['state'].unique().tolist()
-    drop_type_options = garmin_df['drop_type'].unique().tolist()
-    weight_min, weight_max = int(garmin_df.weight.min()), int(garmin_df.weight.max())
-    height_min, height_max = int(garmin_df.height.min()), int(garmin_df.height.max())
-    age_min, age_max = int(garmin_df.age.min()), int(garmin_df.age.max())
-
-
-
-
-
-    default_values = {
-        'selected_users': [],
-        'selected_state_of_residence': state_of_residence_options,
-        'selected_age_range': (age_min, age_max),
-        'selected_weight_range': (weight_min, weight_max),
-        'selected_height_range': (height_min, height_max),
-        'selected_users_control': [],
-        'selected_state_of_residence_control': state_of_residence_options,
-        'selected_age_range_control': (age_min, age_max),
-        'selected_weight_range_control': (weight_min, weight_max),
-        'selected_height_range_control': (height_min, height_max),
-        'start_date': datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d'),
-        'end_date': datetime.datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d'),
-        # 'num_time_ranges': 3,
-        # 'time_ranges': [
-        #     (datetime.time(6, 45), datetime.time(9, 30)),
-        #     (datetime.time(12, 30), datetime.time(16, 0)),
-        #     (datetime.time(20, 0), datetime.time(4, 45))
-        # ]
-    }
-
-    # User-provided prompt
-    if prompt := st.chat_input(disabled=not os.environ['OPENAI_API_KEY'], placeholder="Need AI Assistance? Type your prompt here."):
-        st.session_state.messages = st.session_state.messages if 'messages' in st.session_state else []
-        st.session_state.messages.append(prompt)
-        query_dict = parse_query(prompt, default_values)
-        for k, v in query_dict.items():
-            if 'date' in k:
-                v = dt.strptime(v, '%Y-%m-%d')
-            st.session_state[k] = v
-        if query_dict['selected_users'] == []:
-            session.subject_selection_type = 1
-        else :
-            session.subject_selection_type = 0
-        if query_dict['selected_users_control'] == []:
-            session.control_selection_type = 2
+# Function to create a widget based on attribute type and store the input
+def create_default_values(attributes, db_conn, config):
+    default_values = dict()
+    db_user_table = config['mapping']['tables']['user_table']['name']
+    for attribute in attributes:
+        name = attribute['name']
+        attr_type = attribute['type']
+        if name == config['mapping']['columns']['user_id']:
+            continue
+        if attr_type == 'int':
+            min_val, max_val = pd.read_sql(f"SELECT min({name}), max({name}) FROM {db_user_table}", db_conn).values.squeeze()
+            min_val = int(min_val)
+            max_val = int(max_val)
+            default_values[name] = (min_val, max_val)
+        elif attr_type == 'float':
+            min_val, max_val = pd.read_sql(f"SELECT min({name}), max({name}) FROM {db_user_table}", db_conn).values.squeeze()
+            min_val = float(min_val)
+            max_val = float(max_val)
+            default_values[name] = (min_val, max_val)
+        elif attr_type == 'string':
+            possible_values = pd.read_sql(f"SELECT distinct({name}) FROM {db_user_table}", db_conn).values.squeeze().tolist()
+            default_values[name] = possible_values
+        elif attr_type == 'datetime':
+            min_val, max_val = pd.read_sql(f"SELECT min({name}), max({name}) FROM {db_user_table}", db_conn).values.squeeze()
+            min_val = pd.to_datetime(min_val)
+            max_val = pd.to_datetime(max_val)
+            default_values[name] = (min_val, max_val)
+        elif attr_type == 'boolean':
+            default_values[name] = False
         else:
-            session.control_selection_type = 1
-
-        
-    # top-level filters
-    
-    # Selecting the Subjects
-    st.header("Select Subject(s)")
-    # add selector for user
-    subject_selection_options = ['id', 'attribute']
-    subject_selection_type = st.radio("Select subject(s) by id or by attribute?", subject_selection_options, index=session.get('subject_selection_type', 0))
-    
-    selected_users = []
-    if subject_selection_type == 'id':
-        selected_users = st.multiselect(
-            "Select Subject ID(s)",
-            options=user_ids,
-            default=session.get('selected_users', []))
-        
-    selected_rank = []
-    selected_drop_type = []
-    selected_state_of_residence = []
-    selected_state_of_residence_control = []
-    selected_weight_range = []
-    selected_height_range = []
-    selected_age_range = []
-    
-    if subject_selection_type == 'attribute':
-        st.subheader("Select Subject(s) Attributes")
-        col1, col2, col3, col4 = st.columns(spec=[2, 3, 3, 3], gap='large')
-        # col1, col2, col3, col4, col5 = st.columns(spec=[1, 3, 3, 3, 1], gap='large')
-        # add radio selector for gender
-        # selected_rank = col1.multiselect(
-        #     "Select military rank",
-        #     options=rank_options,
-        #     key='subject rank',
-        #     # index=session.get('selected_rank', 0)
-        #     default=session.get('selected_rank', [])
-        #     )
-        # selected_rank = selected_rank if selected_rank else rank_options
-
-        selected_state_of_residence = col1.multiselect(
-            "Select state of residence",
-            options=state_of_residence_options,
-            key='subject state of residence',
-            default=session.get('selected_state_of_residence', [])
-            )
-        selected_state_of_residence = selected_state_of_residence if selected_state_of_residence else state_of_residence_options
-
-        # add sliders for weight, height, age
-        selected_age_range = col2.slider(
-            "Select age range (years)",
-            min_value=age_min,
-            max_value=age_max,
-            value=session.get('selected_age_range', (age_min, age_max)),
-            step=1,
-            key='subject age',
-            )
-            
-        selected_weight_range = col3.slider(
-            "Select weight range (lbs)",
-            min_value=weight_min,
-            max_value=weight_max,
-            value=session.get('selected_weight_range', (weight_min, weight_max)),
-            step=1,
-            key='subject weight')
-
-        selected_height_range = col4.slider(
-            "Select height range (inches)",
-            min_value=height_min,
-            max_value=height_max,
-            value=session.get('selected_height_range', (height_min, height_max)),
-            step=1,
-            key='subject height')
-
-        # selected_drop_type = col5.multiselect(
-        #     "Select drop type",
-        #     options=drop_type_options,
-        #     key='drop type',
-        #     default=session.get('selected_drop_type', [])
-        #     )
-        # selected_drop_type = selected_drop_type if selected_drop_type else drop_type_options
-            
-            
-    # Selecting the control group
-    st.header("Select Control Group")
-    # add selector for user
-    control_selection_options = ['all', 'id', 'attribute']
-    control_selection_type = st.radio("Select control group (either as all studied individuals or filter by id or attribute)?", 
-                                      control_selection_options,
-                                      index=session.get('control_selection_type', 0))
-    
-    selected_users_control = []
-    if control_selection_type == 'id':
-        selected_users_control = st.multiselect(
-            "Select Control Target ID(s)",
-            options=user_ids,
-            default=session.get('selected_users_control', [])
-        )
-        
-    selected_rank_control = []
-    selected_state_of_residence_control = []
-    selected_drop_type_control = []
-    selected_weight_range_control = []
-    selected_height_range_control = []
-    selected_age_range_control = []
-    
-    if control_selection_type == 'attribute':
-        st.subheader("Select Control Group Attributes")
-        col1, col2, col3, col4 = st.columns(spec=[2, 3, 3, 3], gap='large')
-        # col1, col2, col3, col4, col5 = st.columns(spec=[1, 3, 3, 3, 1], gap='large')
-        # add radio selector for gender
-        # selected_rank_control = col1.multiselect(
-        #     "Select military rank",
-        #     options=rank_options,
-        #     key='control military rank',
-        #     # index=session.get('selected_rank_control', 0)
-        #     default=session.get('selected_rank_control', [])
-        #     )
-        # selected_rank_control = selected_rank_control if selected_rank_control else rank_options
-        selected_state_of_residence_control = col1.multiselect(
-            "Select state of residence",
-            options=state_of_residence_options,
-            key='control state of residence',
-            default=session.get('selected_state_of_residence_control', [])
-            )
-        selected_state_of_residence_control = selected_state_of_residence_control if selected_state_of_residence_control else state_of_residence_options
-
-        # add sliders for weight, height, age
-        selected_age_range_control = col2.slider(
-            "Select age range (years)",
-            min_value=age_min,
-            max_value=age_max,
-            value=session.get('selected_age_range_control', (age_min, age_max)),
-            step=1,
-            key='control age')
-            
-        selected_weight_range_control = col3.slider(
-            "Select weight range (lbs)",
-            min_value=weight_min,
-            max_value=weight_max,
-            value=session.get('selected_weight_range_control', (weight_min, weight_max)),
-            step=1,
-            key='control weight')
-
-        selected_height_range_control = col4.slider(
-            "Select height range (inches)",
-            min_value=height_min,
-            max_value=height_max,
-            value=session.get('selected_height_range_control', (height_min, height_max)),
-            step=1,
-            key='control height')
-
-        # selected_drop_type_control = col5.multiselect(
-        #     "Select drop type",
-        #     options=drop_type_options,
-        #     key='control drop type',
-        #     # index=session.get('selected_rank_control', 0)
-        #     default=session.get('selected_drop_type_control', [])
-        #     )
-        # selected_drop_type_control = selected_drop_type_control if selected_drop_type_control else drop_type_options
-
-
-    st.header("Visualization/Analysis Configuration")
-
-    real_time_update = st.checkbox("Real-Time stream simulation?", value=session.get("real_time_update", False))
-
-    if not real_time_update:
-        start_date = st.date_input(
-        "Start date",
-        session.get("start_date", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
-        )
-        
-        end_date = st.date_input(
-        "End date",
-        session.get("end_date", datetime.datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S'))
-        )
-        
-        st.markdown("#### Need to analyze specific time range? Select how many range(s) you want to analyze.")
-        num_time_ranges = st.selectbox("Select how many time range(s) you want to analyze", range(0, 10), 
-                                       index=session.get('num_time_ranges', 3))
-        def_time_ranges =[
-            (dt_time(6, 45), dt_time(9, 30)),
-            (dt_time(12, 30), dt_time(16, 0)),
-            (dt_time(20, 0), dt_time(4, 45))
-        ]
-        def_time_ranges_labels = ['Workout #1', 'Workout #2', 'Sleep Schedule']
-        time_ranges = session.get('time_ranges', def_time_ranges)
-        time_ranges_labels = session.get('time_ranges_labels', def_time_ranges_labels)
-        if num_time_ranges > 0:
-            with st.expander(f"###### Time Ranges"):
-                updated_ranges = []
-                updated_range_labels = []
-                for i in range(num_time_ranges):
-                    # 2 columns for each time range
-                    col1, col2, col3 = st.columns(spec=[1, 2, 2])
-                    with col1:
-                        range_label = st.text_input(f"Label for range {i+1}", value=(time_ranges_labels[i] if i < len(time_ranges_labels) else f"Time range {i+1}"))
-                    with col2:
-                        range_start = st.time_input(f"Start time for range {i+1}", value=(time_ranges[i][0] if i < len(time_ranges) else dt_time(0, 0)))
-                    with col3:
-                        range_end = st.time_input(f"End time for range {i+1}", value=(time_ranges[i][1] if i < len(time_ranges) else dt_time(0, 0)))
-                    updated_ranges.append((range_start, range_end))
-                    updated_range_labels.append(range_label)
-                    # st.divider()
-                time_ranges = updated_ranges
-                time_ranges_labels = updated_range_labels
-
-
-    else:
-        col1, col2 = st.columns(2)
-        with col1:
-            stream_start_date = st.date_input(
-            "Start Date for Simulating Real-Time Stream",
-            session.get("stream_start_date", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
-            )
-        with col2:
-            stream_start_time = st.time_input(
-            "Start Time for Simulating Real-Time Stream",
-            session.get("stream_start_time", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
-            )
-
-    if real_time_update:
-        window_size = st.number_input('Window Size (seconds)', value=session.get("window_size", DEFAULT_WINDOW_SIZE), step=15)
-        TIMEOUT = st.number_input('Fast Forward (Every 1 Hour Equals How Many Seconds?)', value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
-    
-
-        
-    # Add a button to go to the results page
-    if st.button("Show Results"):
-        
-        # save input values to the session state
-        session['real_time_update'] = real_time_update
-        if not real_time_update:
-            session['start_date'] = start_date
-            session['end_date'] = end_date
-            session['num_time_ranges'] = num_time_ranges
-            session['time_ranges'] = time_ranges
-            session['time_ranges_labels'] = time_ranges_labels
-        elif real_time_update:
-            session['stream_start_date'] = stream_start_date
-            session['stream_start_time'] = stream_start_time
-            session['timeout'] = TIMEOUT
-        session["window_size"] = window_size if real_time_update else DEFAULT_WINDOW_SIZE
-        session["real_time_update"] = real_time_update
-        session['subject_selection_type'] = 0 if subject_selection_type == 'id' else 1
-        session['control_selection_type'] = 0 if control_selection_type == 'all' else 1 if control_selection_type == 'id' else 2
-        # session['selected_rank'] = selected_rank
-        # session['selected_rank_control'] = selected_rank_control
-        session['selected_state_of_residence'] = selected_state_of_residence
-        session['selected_state_of_residence_control'] = selected_state_of_residence_control
-        # session['selected_drop_type'] = selected_drop_type
-        # session['selected_drop_type_control'] = selected_drop_type_control
-        session['selected_age_range'] = selected_age_range
-        session['selected_age_range_control'] = selected_age_range_control
-        session['selected_weight_range'] = selected_weight_range
-        session['selected_weight_range_control'] = selected_weight_range_control
-        session['selected_height_range'] = selected_height_range
-        session['selected_height_range_control'] = selected_height_range_control
-        session['selected_users'] = selected_users if subject_selection_type == 'id' else []
-        session['selected_users_control'] = selected_users_control if control_selection_type == 'id' else []
-
-        
-        
-        # Filter the dataframe based on the selected criteria for subjects
-        if subject_selection_type == 'id':
-            subjects_df = garmin_df.query('subj_id in @selected_users')
-        else:
-            # subjects_df = garmin_df.query('rank == @selected_rank and drop_type == @selected_drop_type and weight >= @selected_weight_range[0] and weight <= @selected_weight_range[1] and height >= @selected_height_range[0] and height <= @selected_height_range[1] and age >= @selected_age_range[0] and age <= @selected_age_range[1]')
-            subjects_df = garmin_df.query('state in @selected_state_of_residence and weight >= @selected_weight_range[0] and weight <= @selected_weight_range[1] and height >= @selected_height_range[0] and height <= @selected_height_range[1] and age >= @selected_age_range[0] and age <= @selected_age_range[1]')
-            
-        # Filter the dataframe based on the selected criteria for control group
-        if control_selection_type == 'all':
-            control_df = garmin_df
-        elif control_selection_type == 'id':
-            control_df = garmin_df.query('user_id in @selected_users_control')
-        else:
-            # control_df = garmin_df.query('rank == @selected_rank_control and drop_type == @selected_drop_type_control and weight >= @selected_weight_range_control[0] and weight <= @selected_weight_range_control[1] and height >= @selected_height_range_control[0] and height <= @selected_height_range_control[1] and age >= @selected_age_range_control[0] and age <= @selected_age_range_control[1]')
-            control_df = garmin_df.query('state in @selected_state_of_residence_control and weight >= @selected_weight_range_control[0] and weight <= @selected_weight_range_control[1] and height >= @selected_height_range_control[0] and height <= @selected_height_range_control[1] and age >= @selected_age_range_control[0] and age <= @selected_age_range_control[1]')
-        
-        # Store the filtered dataframe in session state
-        session['subjects_df'] = subjects_df
-        session['control_df'] = control_df
-
-        session_copy = session
-        saveSessionByUsername(session_copy)
-
-        # Go to the results page
-        session['page'] = "results"
-
-        st.experimental_rerun()
-
+            raise ValueError(f"Attribute type {attr_type} not supported.")
+    return default_values
 
 
 
 # Function to create a widget based on attribute type and store the input
-def create_widget(attribute, db_conn, config):
+def create_widget(attribute, default_values, tag='subject', session=st.session_state):
     name = attribute['name']
     attr_type = attribute['type']
     description = attribute['description']
     label = f'{name}: {description}'
-
-
-    db_user_table = config['mapping']['tables']['user_table']['name']
-
+    key = f'{tag}_{name}'
+    default_val = default_values[name]
+    val = session.get(f'selected_{key}', default_val)
     if attr_type == 'int':
-        min_val, max_val = pd.read_sql(f"SELECT min({name}), max({name}) FROM {db_user_table}", db_conn).values.squeeze()
-        min_val = int(min_val)
-        max_val = int(max_val)
-        input_item = st.slider(label, min_value=min_val, max_value=max_val, key=name, step=1, value=(min_val, max_val))
+        min_val = default_val[0]
+        max_val = default_val[1]
+        input_item = st.slider(label, min_value=min_val, max_value=max_val, key=key, step=1, value=val)
     elif attr_type == 'float':
-        min_val, max_val = pd.read_sql(f"SELECT min({name}), max({name}) FROM {db_user_table}", db_conn).values.squeeze()
-        min_val = float(min_val)
-        max_val = float(max_val)
-        input_item = st.slider(label, min_value=min_val, max_value=max_val, key=name, step=0.1, value=(min_val, max_val))
+        min_val = default_val[0]
+        max_val = default_val[1]
+        input_item = st.slider(label, min_value=min_val, max_value=max_val, key=key, step=0.1, value=val)
     elif attr_type == 'string':
-        possible_values = pd.read_sql(f"SELECT distinct({name}) FROM {db_user_table}", db_conn).values.squeeze().tolist()
-        input_item =  st.multiselect(label, possible_values, key=name)
+        possible_values = default_val
+        input_item = st.multiselect(f'{label} (Blank allows all)', options=possible_values, key=key, default=val)
+        if len(input_item) == 0:
+            input_item = possible_values
     elif attr_type == 'datetime':
-        min_val, max_val = pd.read_sql(f"SELECT min({name}), max({name}) FROM {db_user_table}", db_conn).values.squeeze()
-        min_val = pd.to_datetime(min_val)
-        max_val = pd.to_datetime(max_val)
-        input_item = st.date_input(label, min_value=min_val, max_value=max_val, key=name, value=(min_val, max_val))
+        min_val = default_val[0]
+        max_val = default_val[1]
+        input_item = st.date_input(label, min_value=min_val, max_value=max_val, key=key, value=val)
     elif attr_type == 'boolean':
-        input_item = st.checkbox(label, key=name)
+        input_item = st.checkbox(label, key=key, value=val)
     else:
         raise ValueError(f"Attribute type {attr_type} not supported.")
     return input_item
@@ -744,13 +425,18 @@ def input_page(config):
     selected_users = []
     if subject_selection_type == 'id':
         selected_users = st.multiselect(
-            "Select Subject ID(s)",
+            "Select Subject ID(s) (Blank allows all)",
             options=user_ids,
             default=session.get('selected_users', []))
+        if len(selected_users) > 0:
+            temp_select_users = selected_users
+        else:
+            temp_select_users = user_ids
         
     selected_subj_attributes = dict()
     
     attrs_size_per_row = config['display_options']['input_page']['attributes_per_row_size']
+    default_attr_values = create_default_values(user_config['attributes'], db_conn, config)
     if subject_selection_type == 'attribute':
         st.subheader("Select Subject(s) Attributes")
         counter = 0
@@ -760,7 +446,7 @@ def input_page(config):
             with cols[counter % len(attrs_size_per_row)]:
                 if attribute['name'] == config['mapping']['columns']['user_id']:
                     continue
-                selected_subj_attributes[attribute['name']] = create_widget(attribute, db_conn, config)
+                selected_subj_attributes[attribute['name']] = create_widget(attribute, default_attr_values, tag='subject')
                 counter += 1
 
     # Selecting the control group
@@ -774,10 +460,16 @@ def input_page(config):
     selected_users_control = []
     if control_selection_type == 'id':
         selected_users_control = st.multiselect(
-            "Select Control Target ID(s)",
+            "Select Control Target ID(s) (Blank allows all)",
             options=user_ids,
             default=session.get('selected_users_control', [])
         )
+        if len(selected_users_control) > 0:
+            temp_select_users_control = selected_users_control
+        else:
+            temp_select_users_control = user_ids
+
+
         
     selected_control_attributes = dict()
     if control_selection_type == 'attribute':
@@ -789,7 +481,7 @@ def input_page(config):
             with cols[counter % len(attrs_size_per_row)]:
                 if attribute['name'] == config['mapping']['columns']['user_id']:
                     continue
-                selected_control_attributes[attribute['name']] = create_widget(attribute, db_conn, config)
+                selected_control_attributes[attribute['name']] = create_widget(attribute, default_attr_values, tag='control')
                 counter += 1
 
 
@@ -883,13 +575,18 @@ def input_page(config):
         session['selected_users'] = selected_users if subject_selection_type == 'id' else []
         session['selected_users_control'] = selected_users_control if control_selection_type == 'id' else []
 
+        for name, value in selected_subj_attributes.items():
+            session[f'selected_subject_{name}'] = value
+        for name, value in selected_control_attributes.items():
+            session[f'selected_control_{name}'] = value
+
         
         # get full user table
         user_df = get_users_df(db_conn, config)
         user_id_col_name = config['mapping']['columns']['user_id']
         # Filter the dataframe based on the selected criteria for subjects
         if subject_selection_type == 'id':
-            subjects_df = user_df.query(f'{user_id_col_name} in @selected_users')
+            subjects_df = user_df.query(f'{user_id_col_name} in @temp_select_users')
         else:
             subjects_filter = create_filter_dict(user_config['attributes'], config, selected_subj_attributes)
             subjects_df = filter_users(user_df, subjects_filter)
@@ -898,7 +595,7 @@ def input_page(config):
         if control_selection_type == 'all':
             control_df = user_df
         elif control_selection_type == 'id':
-            control_df = user_df.query(f'{user_id_col_name} in @selected_users_control')
+            control_df = user_df.query(f'{user_id_col_name} in @temp_select_users_control')
         else:
             control_filter = create_filter_dict(user_config['attributes'], config, selected_control_attributes)
             control_df = filter_users(user_df, control_filter)
@@ -1448,7 +1145,7 @@ def query_history_page():
     for i, item in enumerate(query_history):
         if(i == 1):
             break
-        button_label = f"{item.get('selected_users')[0]} : from {item.get('start_date')} to {item.get('end_date')}"
+        button_label = f"{item.get('temp_select_users')[0]} : from {item.get('start_date')} to {item.get('end_date')}"
         if st.button(button_label):
             session = item;
             session['page'] = "results"

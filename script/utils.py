@@ -46,6 +46,9 @@ def load_config(config_file: str) -> dict:
             return yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             print(exc)
+def save_config(config_file,config):
+    with open(config_file, 'w') as file:
+        yaml.dump(config, file)
 
 def getServerIdByNickname(config_file: str='conf/config.yaml', nickname='local db'):
     config = load_config(config_file)

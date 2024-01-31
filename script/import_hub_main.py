@@ -80,6 +80,12 @@ def generate_mets_by_calories(df):
     return df
 
 def import_page():
+    st.subheader("Database Manage")
+    if st.button("Edit Database Settings"):
+        st.session_state["page"] = "setting"
+        st.experimental_rerun()
+
+
     """Main function for the streamlit app"""
     # Load the config
     config = load_config(config_file=CONFIG_FILE)
@@ -141,7 +147,7 @@ def import_page():
     if uploaded_file and not is_subjects_populated:
         st.success("File uploaded!")
         df = pd.read_csv(uploaded_file)
-        df = generate_mets_by_calories(df)
+        # df = generate_mets_by_calories(df)
         st.write("Columns in your CSV:")
         st.write(df.columns)
 

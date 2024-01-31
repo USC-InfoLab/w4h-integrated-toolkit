@@ -5,9 +5,11 @@ import webbrowser
 
 
 def createNav():
+    st.sidebar.title("W4H Integrated Toolkit")
     # Using object notation
     isLogin = st.session_state.get("login-state",False)
     loginPage = st.sidebar.button('Log Out' if isLogin else 'Log In',use_container_width=True,type="primary")
+
 
     st.sidebar.divider()
     st.sidebar.caption("Import Historical Data / Instantiate a New W4H DB Instance")

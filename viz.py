@@ -1251,7 +1251,7 @@ def query_history_page():
 
 def tutorial_page():
     st.markdown('Build your config file from here:  ')
-    st.markdown('[Tutorial](https://chickensellerred.github.io/)')
+    st.markdown('[Tutorial](https://w4h-tutorial.vercel.app/)')
     st.markdown('Then upload here:  ')
     #
     # if page == "Setting up":

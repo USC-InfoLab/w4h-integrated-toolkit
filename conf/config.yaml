@@ -22,7 +22,7 @@ mapping:
         user_id: String(50)
       name: geomts_users
 database1:
-  nickname: 'local'
+  nickname: 'local db'
   dbms: 'postgresql'
   host: 'db'
   port: 5432

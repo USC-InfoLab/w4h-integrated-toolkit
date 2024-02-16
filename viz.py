@@ -20,7 +20,6 @@ from script.nav import createNav
 from script.import_hub_main import import_page
 import geopandas as gpd
 from shapely import wkb
-from st_btn_select import st_btn_select
 
 
 from script.query_history import query_history

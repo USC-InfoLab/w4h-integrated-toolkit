@@ -74,9 +74,6 @@ def get_db_engine(config_file: str='conf/config.yaml',db_server_id = 1, db_serve
     if mixed_db_name != None:
         db_server_nickname = mixed_db_name.split("] ")[0][1:]
         db_name = mixed_db_name.split("] ")[1]
-        print(mixed_db_name,"!")
-        print("server: ", db_server_nickname,"!")
-        print("db_name: ", db_name, "!")
     if db_server_nickname != None:
         db_server_id = getServerIdByNickname(nickname=db_server_nickname)
     db_server = 'database'+str(db_server_id)
@@ -92,7 +89,6 @@ def get_db_engine(config_file: str='conf/config.yaml',db_server_id = 1, db_serve
 
     # creating SQLAlchemy Engine instance
     con_str = f'postgresql://{db_user_encoded}:{db_pass_encoded}@{db_host}:{db_port}/{db_name}'
-    print(con_str)
     db_engine = create_engine(con_str, echo=True)
 
     return db_engine

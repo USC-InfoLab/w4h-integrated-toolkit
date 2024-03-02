@@ -21,10 +21,3 @@ mapping:
         location: String(50)
         user_id: String(50)
       name: geomts_users
-database1:
-  nickname: 'local'
-  dbms: 'postgresql'
-  host: 'db'
-  port: 5432
-  user: 'admin'
-  password: 'admin'

@@ -943,11 +943,14 @@ def results_page():
                                real_time=real_time_update)
 
             # plot calories for each user
+            st.write(df_calories)
+
             grouped_df_calories = df_calories.groupby('user_id')
             for user_id, group in grouped_df_calories:
                 group['datetime'] = pd.to_datetime(group.index)
-                group['value'] = np.where(group['datetime'].diff().shift(-1) > timedelta(hours=2), None, group['value'])
-                fig_calories.add_scatter(x=group.index, y=group['value'], name=f'user_id: {user_id}')
+                # group['value'] = np.where(group['datetime'].diff().shift(-1) > timedelta(hours=2), None, group['value'])
+                fig_calories.add_bar(x=group.index, y=group['value'], name=f'user_id: {user_id}')
+                # fig_calories.add_scatter(x=group.index, y=group['value'], name=f'user_id: {user_id}')
             fig_calories.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
             # add_aux_rectangles(fig_calories, df_calories, df_calories_full, window_start_time, window_end_time, real_time=real_time_update)
 
@@ -1252,7 +1255,7 @@ def query_history_page():
 
 def tutorial_page():
     st.markdown('Build your config file from here:  ')
-    st.markdown('[Tutorial](https://chickensellerred.github.io/)')
+    st.markdown('[Tutorial](https://w4h-tutorial.vercel.app/)')
     st.markdown('Then upload here:  ')
     #
     # if page == "Setting up":

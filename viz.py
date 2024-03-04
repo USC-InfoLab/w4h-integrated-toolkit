@@ -639,8 +639,8 @@ def input_page(config):
 
         q = query_history(session)
         # print('q:qqqq: ',q)
-        getQueryHistoryByUsername(q.data['login-username'])
-        saveQueryHistoryByUsername(q)
+        getSessionByUsername(q.data['login-username'])
+        saveSessionByUsername(q)
 
         # Go to the results page
         session['page'] = "results"
@@ -1225,7 +1225,7 @@ def query_history_page():
 
     st.markdown('Query History')
     username = session.get('login-username')
-    query_history = getQueryHistoryByUsername(username)
+    query_history = getSessionByUsername(username)
 
     st.write(f"Total {len(query_history)} queries")
     for i, query in enumerate(query_history):

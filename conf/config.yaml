@@ -1,23 +1,61 @@
-database_number: 0
+database_number: 1
+
+database1:
+  nickname: 'Google cloud'
+  dbms: 'postgresql'
+  host: '' #  # Replace with your DB host
+  port:  #  # Replace with your DB port
+  user: '' # Replace with your DB username
+  password: '' # Replace with your DB password
+
 mapping:
   columns:
-    timestamp: timestamp
-    user_id: user_id
-    value: value
+    user_id: 'user_id'
+    timestamp: 'timestamp'
+    value: 'value'
   tables:
-    geo:
-    - locations
-    time_series:
-    - heart_rates
-    - calories
-    - mets
-    - distances
-    - steps
-    - sleep
-    - weight
     user_table:
-      columns:
-        device: String(50)
-        location: String(50)
-        user_id: String(50)
-      name: geomts_users
+      name: 'geomts_users'
+      attributes:
+        - name: 'user_id' # this attribute must be present, it should have the same name as the user_id column
+          type: 'string'
+          description: 'Unique identifier for the user'
+        - name: 'age'
+          type: 'int'
+          description: 'Age of the user'
+        - name: 'height'
+          type: 'float'
+          description: 'Height of the user in meters'
+        - name: 'state_of_residence'
+          type: 'string'
+          description: 'State where the user resides'
+        - name: 'data_collection_start_date'
+          type: 'datetime'
+          description: 'Date when the user started data collection'
+        - name: 'consent'
+          type: 'boolean'
+          description: 'Whether the user has consented to data collection'
+        # Add more attributes as needed
+      # Note: Supported types are int, float, string, datetime, and boolean.
+    time_series:
+      - heart_rates
+      - calories
+      - distances
+      - steps
+      - sleep
+      - weight
+    geo:
+      - locations
+
+  # Data type mappings based on SQLAlchemy types
+  data_type_mappings:
+    int: 'Integer'
+    float: 'Float'
+    string: 'String(200)'
+    datetime: 'DateTime'
+    boolean: 'Boolean'
+
+
+display_options:
+  input_page:
+    attributes_per_row_size: [1, 1, 1] # Number and size of columns in the input page per row

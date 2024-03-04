@@ -1267,7 +1267,7 @@ def tutorial_page():
         conf_dir = 'conf'
         if not os.path.exists(conf_dir):
             os.makedirs(conf_dir)
-        with open(f'{conf_dir}/config.yaml', 'w') as f:
+        with open(db_config_path, 'w') as f:
             # write content as string data into the file
             f.write(config_file.getvalue().decode("utf-8"))
         st.success("Update success!")

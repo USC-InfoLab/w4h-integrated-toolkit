@@ -3,7 +3,7 @@ import os
 import sqlite3
 import json
 import pickle
-
+import streamlit as st
 from loguru import logger
 import pandas as pd
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String, ForeignKey, DateTime, REAL, Integer, Float, Boolean
@@ -252,7 +252,7 @@ def updateCurrentDbByUsername(username,currentDb):
 def saveSessionByUsername(session):
     with sqlite3.connect('user.db') as conn:
         cursor = conn.cursor()
-        cursor.execute('''select query_history from users where username = ?''',(session.get('login-username'),))
+        cursor.execute('''select query_history from users where username = ?''',(session.data.get('login-username'),))
         result = cursor.fetchone()
         conn.commit()
     query_history = pickle.loads(result[0])
@@ -262,7 +262,7 @@ def saveSessionByUsername(session):
 
     with sqlite3.connect('user.db') as conn:
         cursor = conn.cursor()
-        cursor.execute('''UPDATE users SET query_history = ? WHERE username = ?''', (serialized_object,session['login-username'],))
+        cursor.execute('''UPDATE users SET query_history = ? WHERE username = ?''', (serialized_object,session.data['login-username'],))
         conn.commit()
 
 def getSessionByUsername(username):

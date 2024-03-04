@@ -96,7 +96,7 @@ def get_db_engine(config_file: str='conf/config.yaml',db_server_id = 1, db_serve
 
     # creating SQLAlchemy Engine instance
     con_str = f'postgresql://{db_user_encoded}:{db_pass_encoded}@{db_host}:{db_port}/{db_name}'
-    db_engine = create_engine(con_str, echo=True, future=True)
+    db_engine = create_engine(con_str, echo=True)
 
     return db_engine
 

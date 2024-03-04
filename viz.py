@@ -94,8 +94,8 @@ def calculate_mets(cal_df, user_weights=None):
 
         calibrated_df = pd.concat([calibrated_df, group])
 
-    #
-    calibrated_df.reset_index(drop=True, inplace=True)
+
+    # calibrated_df.reset_index(drop=True, inplace=True)
     return calibrated_df
     # return pd.DataFrame(columns=['user_id', 'timestamp', 'value'])
 
@@ -814,8 +814,8 @@ def results_page(config):
         for user_id in df_coords["user_id"].unique():
             user_data = df_coords[df_coords["user_id"] == user_id]
             df = pd.DataFrame(columns=['coordinates', 'width'])
-            dict = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
-            df = df.append(dict,ignore_index=True)
+            coordinate_dict = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
+            df = df.append(coordinate_dict,ignore_index=True)
             layers += create_layer(df, color_lookup[user_id])
             # user_trajectories[user_id] = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
 
@@ -1400,7 +1400,7 @@ def main():
     elif session.get("page") == "import":
         import_page()
     elif session.get("page") == "results":
-        results_page()
+        results_page(config=load_config('conf/config.yaml'))
     elif session.get("page") == "query_history":
         query_history_page()
     elif session.get("page") == "setting":

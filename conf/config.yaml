@@ -1,13 +1,3 @@
-database_number: 1
-
-database1:
-  nickname: 'Google cloud'
-  dbms: 'postgresql'
-  host: '' #  # Replace with your DB host
-  port:  #  # Replace with your DB port
-  user: '' # Replace with your DB username
-  password: '' # Replace with your DB password
-
 mapping:
   columns:
     user_id: 'user_id'

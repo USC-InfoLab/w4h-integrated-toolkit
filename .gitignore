@@ -179,3 +179,4 @@ cython_debug/
 #.idea/
 
 conf/temp/config.yaml
+conf/db_config.yaml

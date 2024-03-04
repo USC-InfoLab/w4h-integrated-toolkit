@@ -106,7 +106,7 @@ def import_page():
     # Handling the chosen option
     if database_option == db_selection_options[0]:
         # `get_existing_databases()` retrieves the list of existing databases.
-        existing_databases = get_existing_databases(config_path)  # This function needs to be implemented.
+        existing_databases = get_existing_databases()  # This function needs to be implemented.
         
         selected_db = st.selectbox("**Select an existing database**", existing_databases)
         

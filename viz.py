@@ -45,6 +45,7 @@ USC_CENTER_Y = 34.0224
 USC_CENTER_X = -118.2851
 
 currentDbName = ""
+db_config_path = 'conf/db_config.yaml'
 
 
 # get db engine
@@ -1188,6 +1189,7 @@ def results_page(config):
 
 def login_page():
     st.title("User login")
+
     username = st.text_input("username")
     password = st.text_input("password", type="password")
 
@@ -1273,7 +1275,7 @@ def tutorial_page():
 def setting_page():
     st.title("Database Management")
 
-    config = load_config('conf/config.yaml')
+    config = load_config(db_config_path)
     if 'database_number' not in config:
         st.error('key wrong: "database_number" in config')
         return
@@ -1310,7 +1312,7 @@ def setting_page():
                             'user': user,
                             'password': password
                         }
-                        save_config('conf/config.yaml',config)
+                        save_config(db_config_path,config)
                         st.experimental_rerun()  # 重新运行应用
 
                     if is_deleting:
@@ -1323,7 +1325,7 @@ def setting_page():
                             else:
                                 config[f'database{j}'] = config[f'database{j+1}']
                         config['database_number'] -= 1
-                        save_config('conf/config.yaml', config)
+                        save_config(db_config_path, config)
                         st.experimental_rerun()  # 重新运行应用
 
 
@@ -1351,13 +1353,13 @@ def setting_page():
                 'password': password
             }
             config['database_number'] += 1
-            save_config('conf/config.yaml',config)
+            save_config(db_config_path ,config)
             st.experimental_rerun()  # 重新运行应用
 
     # 总体保存按钮
     st.write("")  # 添加一行空白
     if st.button("Save All", ):
-        save_config('conf/config.yaml',config)
+        save_config(db_config_path,config)
 
 
 def main():

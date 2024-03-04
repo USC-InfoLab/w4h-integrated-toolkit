@@ -9,6 +9,8 @@ user.db
 
 
 conf/temp
+conf/config.yaml
+conf/tem
 tools/
 
 # Don't stages dataset
@@ -177,4 +179,3 @@ cython_debug/
 #.idea/
 
 conf/temp/config.yaml
-conf/config.yaml

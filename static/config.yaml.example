@@ -33,7 +33,6 @@ mapping:
     time_series:
       - heart_rates
       - calories
-      - mets
       - distances
       - steps
       - sleep

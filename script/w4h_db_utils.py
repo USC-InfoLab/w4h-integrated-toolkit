@@ -6,7 +6,7 @@ import pickle
 
 from loguru import logger
 import pandas as pd
-from sqlalchemy import create_engine, text, MetaData, Table, Column, String, ForeignKey, DateTime, REAL
+from sqlalchemy import create_engine, text, MetaData, Table, Column, String, ForeignKey, DateTime, REAL, Integer, Float, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy_utils import database_exists, create_database
 
@@ -26,35 +26,36 @@ def create_tables(db_server_nickname:str, db_name: str, config_file='conf/config
     metadata = MetaData()
     config = load_config(config_file=config_file)
     db_engine = get_db_engine(config_file, db_server_nickname=db_server_nickname, db_name=db_name)
-    try:
-        columns_config = config["mapping"]["columns"]
+    # try:
+    columns_config = config["mapping"]["columns"]
 
-        # Create the user table
-        user_table_config = config["mapping"]["tables"]["user_table"]
-        user_columns = [eval(f'Column("{col_name}", {col_dtype}, primary_key={col_name == columns_config["user_id"]})') for col_name, col_dtype in user_table_config["columns"].items()]  # Convert string to actual SQLAlchemy type
-        user_table = Table(user_table_config["name"], metadata, *user_columns)
+    # Create the user table
+    user_table_config = config["mapping"]["tables"]["user_table"]
+    dtype_mappings = config['mapping']['data_type_mappings']
+    user_columns = [eval(f'Column("{col_attribute["name"]}", {dtype_mappings[col_attribute["type"]]}, primary_key={col_attribute["name"] == columns_config["user_id"]})') for col_attribute in user_table_config["attributes"]]  # Convert string to actual SQLAlchemy type
+    user_table = Table(user_table_config["name"], metadata, *user_columns)
 
 
-        # Create time series tables
-        for table_name in config["mapping"]["tables"]["time_series"]:
-            table = Table(table_name, metadata,
-                Column(columns_config["user_id"], ForeignKey(user_table_config["name"] + '.' + columns_config["user_id"]), primary_key=True),
-                Column(columns_config["timestamp"], DateTime, primary_key=True),
-                Column(columns_config["value"], REAL),
-            )
+    # Create time series tables
+    for table_name in config["mapping"]["tables"]["time_series"]:
+        table = Table(table_name, metadata,
+            Column(columns_config["user_id"], ForeignKey(user_table_config["name"] + '.' + columns_config["user_id"]), primary_key=True),
+            Column(columns_config["timestamp"], DateTime, primary_key=True),
+            Column(columns_config["value"], REAL),
+        )
 
-        # Create geo tables
-        for table_name in config["mapping"]["tables"]["geo"]:
-            table = Table(table_name, metadata,
-                Column(columns_config["user_id"], ForeignKey(user_table_config["name"] + '.' + columns_config["user_id"]), primary_key=True),
-                Column(columns_config["timestamp"], DateTime, primary_key=True),
-                Column(columns_config["value"], Geometry('POINT'))
-            )
+    # Create geo tables
+    for table_name in config["mapping"]["tables"]["geo"]:
+        table = Table(table_name, metadata,
+            Column(columns_config["user_id"], ForeignKey(user_table_config["name"] + '.' + columns_config["user_id"]), primary_key=True),
+            Column(columns_config["timestamp"], DateTime, primary_key=True),
+            Column(columns_config["value"], Geometry('POINT'))
+        )
 
-        metadata.create_all(db_engine)
-    except Exception as err:
-        db_engine.dispose()
-        logger.error(err)
+    metadata.create_all(db_engine)
+    # except Exception as err:
+    #     db_engine.dispose()
+    #     logger.error(err)
     
         
         
@@ -204,13 +205,14 @@ def populate_tables(df: pd.DataFrame, db_name: str, mappings: dict, config_path=
     engine.dispose()
 
 
-def populate_subject_table(df: pd.DataFrame, db_name: str, config_path='conf/config.yaml', user_tbl_name=None):
-    """Populate the W4H subject table in the given database with the data from the given dataframe based on
-    the given subject table name in the config file.
+def populate_subject_table(df: pd.DataFrame, db_name: str, mappings: dict, config_path='conf/config.yaml'):
+    """Populate the W4H tables in the given database with the data from the given dataframe based on
+    the mappings between the CSV columns and the database tables.
 
     Args:
-        df (pd.DataFrame): Dataframe containing the subject data to be inserted into the database
-        db_name (str): Name of the subject database to insert the data into
+        df (pd.DataFrame): Dataframe containing the data to be inserted into the database
+        db_name (str): Name of the database to insert the data into
+        mappings (dict): Dictionary containing the mappings between the CSV columns and the database tables
         config_path (str, optional): Path to the config file. Defaults to 'conf/config.yaml'.
     """
     # Load the config
@@ -219,11 +221,20 @@ def populate_subject_table(df: pd.DataFrame, db_name: str, config_path='conf/con
     # Create a session
     engine = get_db_engine(config_path, mixed_db_name=db_name)
 
+    # create a user table dataframe using the mappings
+    user_tbl_name = config['mapping']['tables']['user_table']['name']
+    user_df = pd.DataFrame()
+    for k, v in mappings.items():
+        if v is not None:
+            user_df[k] = df[v]
     # populate the user table (directly push df to table), if already exists, append new users
-    df.to_sql(user_tbl_name, engine, if_exists='append', index=False)
+    # if columns don't exist, ignore
+    user_df.to_sql(user_tbl_name, engine, if_exists='append', index=False)
 
     # Commit the remaining changes and close the session
     engine.dispose()
+
+
 
 def getCurrentDbByUsername(username):
     with sqlite3.connect('user.db') as conn:
@@ -245,6 +256,7 @@ def saveSessionByUsername(session):
         result = cursor.fetchone()
         conn.commit()
     query_history = pickle.loads(result[0])
+    # print("history:",query_history[0].get('selected_users'))
     query_history.append(session)
     serialized_object = pickle.dumps(query_history)
 
@@ -253,28 +265,11 @@ def saveSessionByUsername(session):
         cursor.execute('''UPDATE users SET query_history = ? WHERE username = ?''', (serialized_object,session['login-username'],))
         conn.commit()
 
-
-def saveQueryHistoryByUsername(queryHistory):
-    with sqlite3.connect('user.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('''select query_history from users where username = ?''',(queryHistory.data.get('login-username'),))
-        result = cursor.fetchone()
-        conn.commit()
-    historys = pickle.loads(result[0])
-    historys.append(queryHistory)
-    serialized_object = pickle.dumps(historys)
-
-    with sqlite3.connect('user.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('''UPDATE users SET query_history = ? WHERE username = ?''', (serialized_object,queryHistory.data['login-username'],))
-        conn.commit()
-
-def getQueryHistoryByUsername(username):
+def getSessionByUsername(username):
     with sqlite3.connect('user.db') as conn:
         cursor = conn.cursor()
         cursor.execute('''select query_history from users where username = ?''',(username,))
         result = cursor.fetchone()
         conn.commit()
 
-    query_history = pickle.loads(result[0])
-    return query_history
+    return pickle.loads(result[0])

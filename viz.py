@@ -54,26 +54,13 @@ currentDbName = ""
 #     db_pass_enc = urllib.parse.quote_plus(config["database"]["password"])
 #     return create_engine(f'postgresql://{db_user_enc}:{db_pass_enc}@{config["database"]["host"]}:{config["database"]["port"]}/{st.session_state["current_db"]}')
 
-# get user ids
-def get_garmin_user_id(db_conn, pattern=None):
-    # query = f"SELECT user_id FROM {DB_USER_TABLE} WHERE device LIKE '%Garmin%'"
-    query = f"SELECT user_id FROM {DB_USER_TABLE}"
-    params = []
-    if pattern:
-        query += f" WHERE subj_id LIKE %s"
-        pattern = f'%{pattern}%'
-        params = [pattern]
-    # execute the query
-    return pd.read_sql(query, db_conn, params=params).values.squeeze()
-
 
 # get full user info
-def get_garmin_df(db_conn, pattern=None):
-    # query = f"SELECT * FROM {DB_USER_TABLE} WHERE device LIKE '%Garmin%'"
-    query = f"SELECT * FROM {DB_USER_TABLE}"
+def get_users_df(db_conn, config, pattern=None):
+    query = f"SELECT * FROM {config['mapping']['tables']['user_table']['name']}"
     params = []
     if pattern:
-        query += f" WHERE subj_id LIKE %s"
+        query += f" WHERE {config['mapping']['columns']['user_id']} LIKE %s"
         pattern = f'%{pattern}%'
         params = [pattern]
     # execute the query
@@ -91,26 +78,27 @@ def calculate_mets(cal_df, user_weights=None):
 
     grouped = mets_df.groupby('user_id')
 
-    # 初始化一个空的 DataFrame 用于存放处理后的数据
+
     calibrated_df = pd.DataFrame()
     for name, group in grouped:
         # st.write(name)
         # st.write(group.index[0])
         group['datetime'] = pd.to_datetime(group.index)
-        # 对每个用户的 mets 列进行校准，基准值设为1
+        # Calibrate each user's mets column with a baseline value of 1
         baseline = 1.00 / group['value'].mean()
         group['value'] = group['value'] * baseline
 
         group['days_since_start'] = (group.datetime - group.datetime.iloc[0]).dt.total_seconds() / (24 * 3600)
         group['value'] = np.where(group['days_since_start'].diff().shift(-1) > 0.5, None, group['value'])
 
-        # 将处理后的数据添加到新的 DataFrame
+
         calibrated_df = pd.concat([calibrated_df, group])
 
-    # 如果需要，可以重置索引
+    #
     calibrated_df.reset_index(drop=True, inplace=True)
     return calibrated_df
     # return pd.DataFrame(columns=['user_id', 'timestamp', 'value'])
+
 
 
 # dashboard setup
@@ -120,9 +108,10 @@ st.set_page_config(
     layout="wide",
 )
 
+
+
 # Flask server API endpoint
 SERVER_URL = f"http://{HOST}:{PORT}"
-
 
 # read data from Flask server (real-time) or from database (historical)
 def get_data(session=None, real_time=False) -> pd.DataFrame:
@@ -171,6 +160,7 @@ def get_data(session=None, real_time=False) -> pd.DataFrame:
     return df_hrate, df_calories, df_coords
 
 
+
 def get_control_stats(df_hrate_all, df_calories_all, df_mets_all, control_ids):
     df_hrate = df_hrate_all.query('user_id in @control_ids')
     df_calories = df_calories_all.query('user_id in @control_ids')
@@ -203,7 +193,7 @@ def add_aux_rectangles(fig, df, df_full, window_start, window_end, real_time=Fal
     std_val = df_full.value.std()
     safe_min = avg_val - 2 * std_val
     safe_max = avg_val + 2 * std_val
-
+    
     fig.add_shape(
         type='rect',
         xref='paper', yref='y',
@@ -251,21 +241,19 @@ def add_aux_rectangles(fig, df, df_full, window_start, window_end, real_time=Fal
     unsafe_check_window_start = df.index[0]
     if not unsafe_values.empty:
         while unsafe_check_window_start <= unsafe_values.index[-1]:
-            num_unsafe_vals = unsafe_values[(unsafe_values.index >= unsafe_check_window_start) & (
-                        unsafe_values.index < (unsafe_check_window_start + unsafe_check_window_size))].shape[0]
-            num_all_vals = df[(df.index >= unsafe_check_window_start) & (
-                        df.index < (unsafe_check_window_start + unsafe_check_window_size))].shape[0]
+            num_unsafe_vals = unsafe_values[(unsafe_values.index >= unsafe_check_window_start) & (unsafe_values.index < (unsafe_check_window_start + unsafe_check_window_size))].shape[0]
+            num_all_vals = df[(df.index >= unsafe_check_window_start) & (df.index < (unsafe_check_window_start + unsafe_check_window_size))].shape[0]
             if num_unsafe_vals > 0:
                 fig.add_shape(
-                    type='rect',
-                    xref='x', yref='paper',
-                    x0=unsafe_check_window_start, y0=0,
-                    x1=unsafe_check_window_start + unsafe_check_window_size, y1=1,
-                    fillcolor='red',
-                    opacity=0.7 * (num_unsafe_vals / num_all_vals) + 0.2,
-                    layer='below',
-                    line_width=0
-                )
+                        type='rect',
+                        xref='x', yref='paper',
+                        x0=unsafe_check_window_start, y0=0,
+                        x1=unsafe_check_window_start + unsafe_check_window_size, y1=1,
+                        fillcolor='red',
+                        opacity=0.7*(num_unsafe_vals / num_all_vals) + 0.2,
+                        layer='below',
+                        line_width=0
+                    )
             unsafe_check_window_start += unsafe_check_window_size
 
 
@@ -286,7 +274,6 @@ def get_bar_fig(df, label='Feature'):
     fig.update_traces(marker_color=['#636EFA', '#00B050'])
 
     return fig
-
 
 def rgb_to_hex(rgb):
     return '#%02x%02x%02x' % tuple(rgb)
@@ -319,7 +306,7 @@ def create_layer(df, color):
         get_path="coordinates",
         get_width=2
     )
-
+    
     # define the ScatterplotLayer using the first coordinate
     marker_layer_start = pdk.Layer(
         "ScatterplotLayer",
@@ -329,7 +316,7 @@ def create_layer(df, color):
         get_fill_color=[0, 0, 255],
         pickable=True
     )
-
+    
     marker_layer_end = pdk.Layer(
         "ScatterplotLayer",
         data=[{"position": coordinates.tolist()[-1]}],
@@ -338,12 +325,113 @@ def create_layer(df, color):
         get_fill_color=[255, 0, 0],
         pickable=True
     )
-
+    
     return [layer, marker_layer_start, marker_layer_end]
 
 
+
+# Function to create a widget based on attribute type and store the input
+def create_default_values(attributes, db_conn, config):
+    default_values = dict()
+    db_user_table = config['mapping']['tables']['user_table']['name']
+    for attribute in attributes:
+        name = attribute['name']
+        attr_type = attribute['type']
+        if name == config['mapping']['columns']['user_id']:
+            continue
+        if attr_type == 'int':
+            min_val, max_val = pd.read_sql(f"SELECT min({name}), max({name}) FROM {db_user_table}", db_conn).values.squeeze()
+            min_val = int(min_val)
+            max_val = int(max_val)
+            default_values[name] = (min_val, max_val)
+        elif attr_type == 'float':
+            min_val, max_val = pd.read_sql(f"SELECT min({name}), max({name}) FROM {db_user_table}", db_conn).values.squeeze()
+            min_val = float(min_val)
+            max_val = float(max_val)
+            default_values[name] = (min_val, max_val)
+        elif attr_type == 'string':
+            possible_values = pd.read_sql(f"SELECT distinct({name}) FROM {db_user_table}", db_conn).values.squeeze().tolist()
+            default_values[name] = possible_values
+        elif attr_type == 'datetime':
+            min_val, max_val = pd.read_sql(f"SELECT min({name}), max({name}) FROM {db_user_table}", db_conn).values.squeeze()
+            min_val = pd.to_datetime(min_val)
+            max_val = pd.to_datetime(max_val)
+            default_values[name] = (min_val, max_val)
+        elif attr_type == 'boolean':
+            default_values[name] = False
+        else:
+            raise ValueError(f"Attribute type {attr_type} not supported.")
+    return default_values
+
+
+
+# Function to create a widget based on attribute type and store the input
+def create_widget(attribute, default_values, tag='subject', session=st.session_state):
+    name = attribute['name']
+    attr_type = attribute['type']
+    description = attribute['description']
+    label = f'{name}: {description}'
+    key = f'{tag}_{name}'
+    default_val = default_values[name]
+    val = session.get(f'selected_{key}', default_val)
+    if attr_type == 'int':
+        min_val = default_val[0]
+        max_val = default_val[1]
+        input_item = st.slider(label, min_value=min_val, max_value=max_val, key=key, step=1, value=val)
+    elif attr_type == 'float':
+        min_val = default_val[0]
+        max_val = default_val[1]
+        input_item = st.slider(label, min_value=min_val, max_value=max_val, key=key, step=0.1, value=val)
+    elif attr_type == 'string':
+        possible_values = default_val
+        input_item = st.multiselect(f'{label} (Blank allows all)', options=possible_values, key=key, default=val)
+        if len(input_item) == 0:
+            input_item = possible_values
+    elif attr_type == 'datetime':
+        min_val = default_val[0]
+        max_val = default_val[1]
+        input_item = st.date_input(label, min_value=min_val, max_value=max_val, key=key, value=val)
+    elif attr_type == 'boolean':
+        input_item = st.checkbox(label, key=key, value=val)
+    else:
+        raise ValueError(f"Attribute type {attr_type} not supported.")
+    return input_item
+
+
+def create_filter_dict(attributes, config, selected_attrs):
+    filter_dict = dict()
+    for attribute in attributes:
+        if attribute['name'] == config['mapping']['columns']['user_id']:
+            continue
+        item = attribute.copy()
+        item['value'] = selected_attrs[attribute['name']]
+        filter_dict[attribute['name']] = item
+    return filter_dict
+
+
+def filter_users(df, attributes, ignore_nulls=True):
+    for attribute in attributes.values():
+        name = attribute['name']
+        attr_type = attribute['type']
+        ignore_nulls_str = f'or {name}.isnull()' if ignore_nulls else ''
+        if attr_type == 'int':
+            df = df.query(f"({name} >= {attribute['value'][0]} and {name} <= {attribute['value'][1]}) {ignore_nulls_str}")
+        elif attr_type == 'float':
+            df = df.query(f"{name} >= {attribute['value'][0]} and {name} <= {attribute['value'][1]} {ignore_nulls_str}")
+        elif attr_type == 'string':
+            df = df.query(f"{name} in {attribute['value']} {ignore_nulls_str}")
+        elif attr_type == 'datetime':
+            df = df.query(f"{name} >= '{attribute['value'][0]}' and {name} <= '{attribute['value'][1]}' {ignore_nulls_str}")
+        elif attr_type == 'boolean':
+            df = df.query(f"{name} == {attribute['value']} {ignore_nulls_str}")
+        else:
+            raise ValueError(f"Attribute type {attr_type} not supported.")
+    return df
+
+
+
 # Define the input page
-def input_page(garmin_df):
+def input_page(config):
     global TIMEOUT
     # Get the session state
     session = st.session_state
@@ -351,94 +439,49 @@ def input_page(garmin_df):
         st.error("Please run the app first.")
         return
 
-    # preparing data
-    user_ids = garmin_df.subj_id.tolist()
-    rank_options = garmin_df['rank'].unique().tolist()
-    state_of_residence_options = garmin_df['state'].unique().tolist()
-    drop_type_options = garmin_df['drop_type'].unique().tolist()
-    weight_min, weight_max = int(garmin_df.weight.min()), int(garmin_df.weight.max())
-    height_min, height_max = int(garmin_df.height.min()), int(garmin_df.height.max())
-    age_min, age_max = int(garmin_df.age.min()), int(garmin_df.age.max())
+    # get the user table config
+    user_config = config['mapping']['tables']['user_table']
+
+    # Connect to the database
+    db_conn = get_db_engine(mixed_db_name=session["current_db"])
+    # get the list of user id's
+    user_ids = pd.read_sql(f"SELECT distinct({config['mapping']['columns']['user_id']}) FROM {config['mapping']['tables']['user_table']['name']}", db_conn).values.squeeze().tolist()
+
 
     # top-level filters
-
+    
     # Selecting the Subjects
     st.header("Select Subject(s)")
     # add selector for user
     subject_selection_options = ['id', 'attribute']
-    subject_selection_type = st.radio("Select subject(s) by id or by attribute?", subject_selection_options,
-                                      index=session.get('subject_selection_type', 0))
-
+    subject_selection_type = st.radio("Select subject(s) by id or by attribute?", subject_selection_options, index=session.get('subject_selection_type', 0))
+    
     selected_users = []
     if subject_selection_type == 'id':
         selected_users = st.multiselect(
-            "Select Subject ID(s)",
+            "Select Subject ID(s) (Blank allows all)",
             options=user_ids,
             default=session.get('selected_users', []))
+        if len(selected_users) > 0:
+            temp_select_users = selected_users
+        else:
+            temp_select_users = user_ids
 
-    selected_rank = []
-    selected_drop_type = []
-    selected_state_of_residence = []
-    selected_state_of_residence_control = []
-    selected_weight_range = []
-    selected_height_range = []
-    selected_age_range = []
+    selected_subj_attributes = dict()
 
+    attrs_size_per_row = config['display_options']['input_page']['attributes_per_row_size']
+    default_attr_values = create_default_values(user_config['attributes'], db_conn, config)
     if subject_selection_type == 'attribute':
         st.subheader("Select Subject(s) Attributes")
-        col1, col2, col3, col4 = st.columns(spec=[2, 3, 3, 3], gap='large')
-        # col1, col2, col3, col4, col5 = st.columns(spec=[1, 3, 3, 3, 1], gap='large')
-        # add radio selector for gender
-        # selected_rank = col1.multiselect(
-        #     "Select military rank",
-        #     options=rank_options,
-        #     key='subject rank',
-        #     # index=session.get('selected_rank', 0)
-        #     default=session.get('selected_rank', [])
-        #     )
-        # selected_rank = selected_rank if selected_rank else rank_options
-
-        selected_state_of_residence = col1.multiselect(
-            "Select state of residence",
-            options=state_of_residence_options,
-            key='subject state of residence',
-            default=session.get('selected_state_of_residence', [])
-        )
-        selected_state_of_residence = selected_state_of_residence if selected_state_of_residence else state_of_residence_options
-
-        # add sliders for weight, height, age
-        selected_age_range = col2.slider(
-            "Select age range (years)",
-            min_value=age_min,
-            max_value=age_max,
-            value=session.get('selected_age_range', (age_min, age_max)),
-            step=1,
-            key='subject age',
-        )
-
-        selected_weight_range = col3.slider(
-            "Select weight range (lbs)",
-            min_value=weight_min,
-            max_value=weight_max,
-            value=session.get('selected_weight_range', (weight_min, weight_max)),
-            step=1,
-            key='subject weight')
-
-        selected_height_range = col4.slider(
-            "Select height range (inches)",
-            min_value=height_min,
-            max_value=height_max,
-            value=session.get('selected_height_range', (height_min, height_max)),
-            step=1,
-            key='subject height')
-
-        # selected_drop_type = col5.multiselect(
-        #     "Select drop type",
-        #     options=drop_type_options,
-        #     key='drop type',
-        #     default=session.get('selected_drop_type', [])
-        #     )
-        # selected_drop_type = selected_drop_type if selected_drop_type else drop_type_options
+        counter = 0
+        for attribute in user_config['attributes']:
+            if counter % len(attrs_size_per_row) == 0:
+                cols = st.columns(spec=attrs_size_per_row, gap='large')
+            with cols[counter % len(attrs_size_per_row)]:
+                if attribute['name'] == config['mapping']['columns']['user_id']:
+                    continue
+                selected_subj_attributes[attribute['name']] = create_widget(attribute, default_attr_values, tag='subject')
+                counter += 1
 
     # Selecting the control group
     st.header("Select Control Group")
@@ -452,92 +495,50 @@ def input_page(garmin_df):
     selected_users_control = []
     if control_selection_type == 'id':
         selected_users_control = st.multiselect(
-            "Select Control Target ID(s)",
+            "Select Control Target ID(s) (Blank allows all)",
             options=user_ids,
             default=session.get('selected_users_control', [])
         )
+        if len(selected_users_control) > 0:
+            temp_select_users_control = selected_users_control
+        else:
+            temp_select_users_control = user_ids
 
-    selected_rank_control = []
-    selected_state_of_residence_control = []
-    selected_drop_type_control = []
-    selected_weight_range_control = []
-    selected_height_range_control = []
-    selected_age_range_control = []
 
+
+    selected_control_attributes = dict()
     if control_selection_type == 'attribute':
         st.subheader("Select Control Group Attributes")
-        col1, col2, col3, col4 = st.columns(spec=[2, 3, 3, 3], gap='large')
-        # col1, col2, col3, col4, col5 = st.columns(spec=[1, 3, 3, 3, 1], gap='large')
-        # add radio selector for gender
-        # selected_rank_control = col1.multiselect(
-        #     "Select military rank",
-        #     options=rank_options,
-        #     key='control military rank',
-        #     # index=session.get('selected_rank_control', 0)
-        #     default=session.get('selected_rank_control', [])
-        #     )
-        # selected_rank_control = selected_rank_control if selected_rank_control else rank_options
-        selected_state_of_residence_control = col1.multiselect(
-            "Select state of residence",
-            options=state_of_residence_options,
-            key='control state of residence',
-            default=session.get('selected_state_of_residence_control', [])
-        )
-        selected_state_of_residence_control = selected_state_of_residence_control if selected_state_of_residence_control else state_of_residence_options
+        counter = 0
+        for attribute in user_config['attributes']:
+            if counter % len(attrs_size_per_row) == 0:
+                cols = st.columns(spec=attrs_size_per_row, gap='large')
+            with cols[counter % len(attrs_size_per_row)]:
+                if attribute['name'] == config['mapping']['columns']['user_id']:
+                    continue
+                selected_control_attributes[attribute['name']] = create_widget(attribute, default_attr_values, tag='control')
+                counter += 1
 
-        # add sliders for weight, height, age
-        selected_age_range_control = col2.slider(
-            "Select age range (years)",
-            min_value=age_min,
-            max_value=age_max,
-            value=session.get('selected_age_range_control', (age_min, age_max)),
-            step=1,
-            key='control age')
-
-        selected_weight_range_control = col3.slider(
-            "Select weight range (lbs)",
-            min_value=weight_min,
-            max_value=weight_max,
-            value=session.get('selected_weight_range_control', (weight_min, weight_max)),
-            step=1,
-            key='control weight')
-
-        selected_height_range_control = col4.slider(
-            "Select height range (inches)",
-            min_value=height_min,
-            max_value=height_max,
-            value=session.get('selected_height_range_control', (height_min, height_max)),
-            step=1,
-            key='control height')
-
-        # selected_drop_type_control = col5.multiselect(
-        #     "Select drop type",
-        #     options=drop_type_options,
-        #     key='control drop type',
-        #     # index=session.get('selected_rank_control', 0)
-        #     default=session.get('selected_drop_type_control', [])
-        #     )
-        # selected_drop_type_control = selected_drop_type_control if selected_drop_type_control else drop_type_options
 
     st.header("Visualization/Analysis Configuration")
-
     real_time_update = st.checkbox("Real-Time stream simulation?", value=session.get("real_time_update", False))
 
     if not real_time_update:
         start_date = st.date_input(
-            "Start date",
-            session.get("start_date", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+        "Start date",
+        session.get("start_date", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+        )
+        
+        end_date = st.date_input(
+        "End date",
+        session.get("end_date", datetime.datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S'))
         )
 
-        end_date = st.date_input(
-            "End date",
-            session.get("end_date", datetime.datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S'))
-        )
 
         st.markdown("#### Need to analyze specific time range? Select how many range(s) you want to analyze.")
-        num_time_ranges = st.selectbox("Select how many time range(s) you want to analyze", range(0, 10),
+        num_time_ranges = st.selectbox("Select how many time range(s) you want to analyze", range(0, 10), 
                                        index=session.get('num_time_ranges', 3))
-        def_time_ranges = [
+        def_time_ranges =[
             (dt_time(6, 45), dt_time(9, 30)),
             (dt_time(12, 30), dt_time(16, 0)),
             (dt_time(20, 0), dt_time(4, 45))
@@ -553,14 +554,11 @@ def input_page(garmin_df):
                     # 2 columns for each time range
                     col1, col2, col3 = st.columns(spec=[1, 2, 2])
                     with col1:
-                        range_label = st.text_input(f"Label for range {i + 1}", value=(
-                            time_ranges_labels[i] if i < len(time_ranges_labels) else f"Time range {i + 1}"))
+                        range_label = st.text_input(f"Label for range {i+1}", value=(time_ranges_labels[i] if i < len(time_ranges_labels) else f"Time range {i+1}"))
                     with col2:
-                        range_start = st.time_input(f"Start time for range {i + 1}", value=(
-                            time_ranges[i][0] if i < len(time_ranges) else dt_time(0, 0)))
+                        range_start = st.time_input(f"Start time for range {i+1}", value=(time_ranges[i][0] if i < len(time_ranges) else dt_time(0, 0)))
                     with col3:
-                        range_end = st.time_input(f"End time for range {i + 1}",
-                                                  value=(time_ranges[i][1] if i < len(time_ranges) else dt_time(0, 0)))
+                        range_end = st.time_input(f"End time for range {i+1}", value=(time_ranges[i][1] if i < len(time_ranges) else dt_time(0, 0)))
                     updated_ranges.append((range_start, range_end))
                     updated_range_labels.append(range_label)
                     # st.divider()
@@ -570,25 +568,23 @@ def input_page(garmin_df):
         col1, col2 = st.columns(2)
         with col1:
             stream_start_date = st.date_input(
-                "Start Date for Simulating Real-Time Stream",
-                session.get("stream_start_date", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+            "Start Date for Simulating Real-Time Stream",
+            session.get("stream_start_date", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
             )
         with col2:
             stream_start_time = st.time_input(
-                "Start Time for Simulating Real-Time Stream",
-                session.get("stream_start_time", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
+            "Start Time for Simulating Real-Time Stream",
+            session.get("stream_start_time", datetime.datetime.strptime(START_TIME, '%Y-%m-%d %H:%M:%S'))
             )
 
     if real_time_update:
-        window_size = st.number_input('Window Size (seconds)', value=session.get("window_size", DEFAULT_WINDOW_SIZE),
-                                      step=15)
-        TIMEOUT = st.number_input('Fast Forward (Every 1 Hour Equals How Many Seconds?)',
-                                  value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f",
-                                  min_value=0.1, max_value=float(100))
+        window_size = st.number_input('Window Size (seconds)', value=session.get("window_size", DEFAULT_WINDOW_SIZE), step=15)
+        TIMEOUT = st.number_input('Fast Forward (Every 1 Hour Equals How Many Seconds?)', value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
 
+        
     # Add a button to go to the results page
     if st.button("Show Results"):
-
+        
         # save input values to the session state
         session['real_time_update'] = real_time_update
         if not real_time_update:
@@ -604,41 +600,39 @@ def input_page(garmin_df):
         session["window_size"] = window_size if real_time_update else DEFAULT_WINDOW_SIZE
         session["real_time_update"] = real_time_update
         session['subject_selection_type'] = 0 if subject_selection_type == 'id' else 1
-        session[
-            'control_selection_type'] = 0 if control_selection_type == 'all' else 1 if control_selection_type == 'id' else 2
-        # session['selected_rank'] = selected_rank
-        # session['selected_rank_control'] = selected_rank_control
-        session['selected_state_of_residence'] = selected_state_of_residence
-        session['selected_state_of_residence_control'] = selected_state_of_residence_control
-        # session['selected_drop_type'] = selected_drop_type
-        # session['selected_drop_type_control'] = selected_drop_type_control
-        session['selected_age_range'] = selected_age_range
-        session['selected_age_range_control'] = selected_age_range_control
-        session['selected_weight_range'] = selected_weight_range
-        session['selected_weight_range_control'] = selected_weight_range_control
-        session['selected_height_range'] = selected_height_range
-        session['selected_height_range_control'] = selected_height_range_control
+        session['control_selection_type'] = 0 if control_selection_type == 'all' else 1 if control_selection_type == 'id' else 2
+
+        session['selected_subj_attributes'] = selected_subj_attributes
+        session['selected_control_attributes'] = selected_control_attributes
+
         session['selected_users'] = selected_users if subject_selection_type == 'id' else []
         session['selected_users_control'] = selected_users_control if control_selection_type == 'id' else []
 
+        for name, value in selected_subj_attributes.items():
+            session[f'selected_subject_{name}'] = value
+        for name, value in selected_control_attributes.items():
+            session[f'selected_control_{name}'] = value
+
+
+        # get full user table
+        user_df = get_users_df(db_conn, config)
+        user_id_col_name = config['mapping']['columns']['user_id']
         # Filter the dataframe based on the selected criteria for subjects
         if subject_selection_type == 'id':
-            subjects_df = garmin_df.query('subj_id in @selected_users')
+            subjects_df = user_df.query(f'{user_id_col_name} in @temp_select_users')
         else:
-            # subjects_df = garmin_df.query('rank == @selected_rank and drop_type == @selected_drop_type and weight >= @selected_weight_range[0] and weight <= @selected_weight_range[1] and height >= @selected_height_range[0] and height <= @selected_height_range[1] and age >= @selected_age_range[0] and age <= @selected_age_range[1]')
-            subjects_df = garmin_df.query(
-                'state in @selected_state_of_residence and weight >= @selected_weight_range[0] and weight <= @selected_weight_range[1] and height >= @selected_height_range[0] and height <= @selected_height_range[1] and age >= @selected_age_range[0] and age <= @selected_age_range[1]')
-
+            subjects_filter = create_filter_dict(user_config['attributes'], config, selected_subj_attributes)
+            subjects_df = filter_users(user_df, subjects_filter)
+            
         # Filter the dataframe based on the selected criteria for control group
         if control_selection_type == 'all':
-            control_df = garmin_df
+            control_df = user_df
         elif control_selection_type == 'id':
-            control_df = garmin_df.query('user_id in @selected_users_control')
+            control_df = user_df.query(f'{user_id_col_name} in @temp_select_users_control')
         else:
-            # control_df = garmin_df.query('rank == @selected_rank_control and drop_type == @selected_drop_type_control and weight >= @selected_weight_range_control[0] and weight <= @selected_weight_range_control[1] and height >= @selected_height_range_control[0] and height <= @selected_height_range_control[1] and age >= @selected_age_range_control[0] and age <= @selected_age_range_control[1]')
-            control_df = garmin_df.query(
-                'state in @selected_state_of_residence_control and weight >= @selected_weight_range_control[0] and weight <= @selected_weight_range_control[1] and height >= @selected_height_range_control[0] and height <= @selected_height_range_control[1] and age >= @selected_age_range_control[0] and age <= @selected_age_range_control[1]')
-
+            control_filter = create_filter_dict(user_config['attributes'], config, selected_control_attributes)
+            control_df = filter_users(user_df, control_filter)
+        
         # Store the filtered dataframe in session state
         session['subjects_df'] = subjects_df
         session['control_df'] = control_df
@@ -655,41 +649,41 @@ def input_page(garmin_df):
 
 
 # Define the results page
-def results_page():
+def results_page(config):
     # Get the session state
     session = st.session_state
     if session is None:
         st.error("Please use the inputs page first.")
         return
-
+    
+    print('result page!')
+    user_id_col_name = config['mapping']['columns']['user_id']
     subjects_df = session.get('subjects_df')
-    subject_ids = subjects_df.subj_id.tolist()
+    subject_ids = subjects_df[user_id_col_name].tolist()
     control_df = session.get('control_df')
-    control_ids = control_df.subj_id.tolist()
+    control_ids = control_df[user_id_col_name].tolist()
 
     window_size = session['window_size']
     real_time_update = session['real_time_update']
-
+    
     if real_time_update:
         # initialize the stream
         stream_start_date = session['stream_start_date']
         stream_start_time = session['stream_start_time']
         # send start datetime to the stream server
         stream_start_datetime = dt.combine(stream_start_date, stream_start_time)
-        inited_start_datetime = requests.get(SERVER_URL + '/init_stream', params={'start_time': stream_start_datetime,
-                                                                                  'db_name': st.session_state[
-                                                                                      "current_db"]},
-                                             verify=False).json()
+        inited_start_datetime = requests.get(SERVER_URL + '/init_stream', params={'start_time': stream_start_datetime,'db_name':st.session_state["current_db"]},verify=False).json()
         # restart dataframes
         st.session_state['df_hrate_full'] = pd.DataFrame()
         st.session_state['df_calories_full'] = pd.DataFrame()
         st.session_state['df_coords_full'] = gpd.GeoDataFrame()
 
+
     if 'df_hrate_full' not in st.session_state or 'df_calories_full' not in st.session_state or 'df_coords_full' not in st.session_state:
         st.session_state['df_hrate_full'] = pd.DataFrame()
         st.session_state['df_calories_full'] = pd.DataFrame()
         st.session_state['df_coords_full'] = gpd.GeoDataFrame()
-
+        
     # Set initial view state
     view_state = pdk.ViewState(
         latitude=USC_CENTER_Y,
@@ -698,12 +692,12 @@ def results_page():
         pitch=0,
         bearing=0,
     )
-
+    
     # Define map style
     map_style = "mapbox://styles/mapbox/light-v9"
-
+    
     color_lookup = pdk.data_utils.assign_random_colors(subject_ids)
-
+    
     # Load the GeoJSON file
     neighborhoods_data = './neighborhoods.geojson'
 
@@ -721,16 +715,17 @@ def results_page():
         get_line_width=2,
         auto_highlight=True
     )
-
+    
     # Add a button to go back to the input page
     if st.button("Back to Inputs"):
         # Go back to the input page
         session["page"] = "input"
         st.experimental_rerun()
-
+        
     # creating a single-element container
     placeholder = st.empty()
-
+    
+    
     # near real-time / live feed simulation
     while True:
         if len(subject_ids) == 0:
@@ -744,27 +739,25 @@ def results_page():
         df_coords_full = st.session_state['df_coords_full']
         new_hrates, new_calories, new_coords = get_data(session=session, real_time=real_time_update)
         df_hrate_full = pd.concat([df_hrate_full, new_hrates]) if real_time_update else new_hrates
-
         df_calories_full = pd.concat([df_calories_full, new_calories]) if real_time_update else new_calories
         df_coords_full = pd.concat([df_coords_full, new_coords]) if real_time_update else new_coords
         st.session_state['df_hrate_full'] = df_hrate_full
         st.session_state['df_calories_full'] = df_calories_full
         st.session_state['df_coords_full'] = df_coords_full
         df_mets_full = calculate_mets(df_calories_full)
-        # print('df_mets_full: ',df_mets_full)
+        
         # filtering data
         # fix subject ids dtype
         user_id_dtype = df_hrate_full.user_id.dtype
         if user_id_dtype == np.int64:
             user_id_dtype = int
         # else if string
-        elif user_id_dtype == np.object:
+        elif user_id_dtype == object:
             user_id_dtype = str
         # cast subject ids and control ids to the same dtype as df_hrate dtype
         subject_ids = [user_id_dtype(item) for item in subject_ids]
         control_ids = [user_id_dtype(item) for item in control_ids]
         df_hrate = df_hrate_full.loc[df_hrate_full['user_id'].isin(subject_ids)]
-
         df_calories = df_calories_full.loc[df_calories_full['user_id'].isin(subject_ids)]
         df_coords = df_coords_full.loc[df_coords_full['user_id'].isin(subject_ids)]
         df_mets = df_mets_full.loc[df_mets_full['user_id'].isin(subject_ids)]
@@ -784,18 +777,16 @@ def results_page():
         min_mets = df_mets['value'].min()
         max_mets = df_mets['value'].max()
         avg_mets = df_mets['value'].mean()
-
+        
         # getting window records
-        window_end_time = df_hrate.index[-1] if real_time_update and len(df_hrate) > 0 else pd.Timestamp(
-            datetime.datetime.now(), tz='UTC')
-        window_start_time = (df_hrate.index[-1] - timedelta(seconds=window_size)) if real_time_update and len(
-            df_hrate) > 0 else pd.Timestamp(datetime.datetime.now(), tz='UTC')
-
+        window_end_time = df_hrate.index[-1] if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.datetime.now(), tz='UTC')
+        window_start_time = (df_hrate.index[-1] - timedelta(seconds=window_size)) if real_time_update and len(df_hrate)>0 else pd.Timestamp(datetime.datetime.now(), tz='UTC')
+        
         if real_time_update:
             window_hrate_df = df_hrate.loc[df_hrate.index >= window_start_time]
             window_calories_df = df_calories.loc[df_calories.index >= window_start_time]
             window_mets_df = df_mets.loc[df_mets.index >= window_start_time]
-
+            
             avg_win_heart_rate = window_hrate_df['value'].mean()
             min_win_heart_rate = window_hrate_df['value'].min()
             max_win_heart_rate = window_hrate_df['value'].max()
@@ -809,24 +800,25 @@ def results_page():
             min_win_mets = window_mets_df['value'].min()
             max_win_mets = window_mets_df['value'].max()
             avg_win_mets = window_mets_df['value'].mean()
-
+        
         # get control group statistics
         control_stats = get_control_stats(df_hrate_full, df_calories_full, df_mets_full, control_ids=control_ids)
         if real_time_update:
-            win_control_stats = get_control_stats(df_hrate_full.loc[df_hrate_full.index >= window_start_time],
-                                                  df_calories_full.loc[df_calories_full.index >= window_start_time],
-                                                  df_mets_full.loc[df_mets_full.index >= window_start_time],
-                                                  control_ids=control_ids)
-
+            win_control_stats = get_control_stats(df_hrate_full.loc[df_hrate_full.index>=window_start_time], 
+                                            df_calories_full.loc[df_calories_full.index>=window_start_time], 
+                                            df_mets_full.loc[df_mets_full.index>=window_start_time],
+                                            control_ids=control_ids)
+        
         # Add new data to user trajectories
         layers = [neighborhood_layer]
         for user_id in df_coords["user_id"].unique():
             user_data = df_coords[df_coords["user_id"] == user_id]
             df = pd.DataFrame(columns=['coordinates', 'width'])
-            tem_dict = {"coordinates": [[y, x] for y, x in zip(user_data.value.y, user_data.value.x)], "width": 5}
-            df = df.append(tem_dict, ignore_index=True)
+            dict = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
+            df = df.append(dict,ignore_index=True)
             layers += create_layer(df, color_lookup[user_id])
             # user_trajectories[user_id] = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
+
 
         # Create Pydeck layers for each user's trajectory
         # for user_id, user_trajectory in user_trajectories.items():
@@ -836,7 +828,9 @@ def results_page():
         #     layer = create_layer(pd.DataFrame(user_trajectory), color=color_lookup[user_id])
         #     # layers.append(layer)
         #     layers += layer
-
+            
+        
+        
         with placeholder.container():
             get_map_legend(color_lookup)
             # Update Pydeck map with new layers
@@ -844,8 +838,9 @@ def results_page():
                 map_style=map_style,
                 initial_view_state=view_state,
                 layers=layers
-            ))
-
+            ))        
+            
+            
             st.markdown("#### Entire Selected Time")
             # create three columns
             kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
@@ -862,13 +857,13 @@ def results_page():
                 st.error(e)
                 st.error("No data available for heart rate")
                 break
-
+            
             kpi2.metric(
                 label="Min Heart-Rate",
                 value=round(min_heart_rate, 2),
                 delta=round(min_heart_rate - control_stats['heart_rate']['avg']),
             )
-
+            
             kpi3.metric(
                 label="Max Heart-Rate",
                 value=round(max_heart_rate, 2),
@@ -886,10 +881,10 @@ def results_page():
                 value=round(avg_mets, 2),
                 delta=round(avg_mets - control_stats['mets']['avg'], 2),
             )
-
+            
             if real_time_update:
                 st.markdown("#### Selected Window")
-
+                
                 wkpi1, wkpi2, wkpi3, wkpi4, wkpi5 = st.columns(5)
 
                 # fill in those three columns with respective metrics or KPIs
@@ -898,16 +893,17 @@ def results_page():
                     value=round(avg_win_heart_rate),
                     delta=round(avg_win_heart_rate - control_stats['heart_rate']['avg']),
                 )
-
+                
                 wkpi2.metric(
                     label="Minimum Window Heart-Rate",
                     value=round(min_win_heart_rate, 2),
-                    delta=round(min_win_heart_rate - control_stats['heart_rate']['avg']),
+                    delta= round(min_win_heart_rate - control_stats['heart_rate']['avg']),
                 )
-
+                
+                
                 wkpi3.metric(
                     label="Max Window Heart-Rate",
-                    value=round(max_win_heart_rate, 2),
+                    value=round(max_win_heart_rate,2),
                     delta=round(max_win_heart_rate - control_stats['heart_rate']['avg']),
                 )
 
@@ -932,18 +928,15 @@ def results_page():
                                             color="user_id")
 
             grouped_df_hrate = df_hrate.groupby('user_id')
-
+            
             for user_id, group in grouped_df_hrate:
                 fig_hrate.add_scatter(x=group.index, y=group['value'],
-                                      name=f'user_id: {user_id}')
+                                        name=f'user_id: {user_id}')
                 fig_hrate.update_traces(showlegend=True)
             fig_hrate.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
-            add_aux_rectangles(fig_hrate, df_hrate, df_hrate_full, window_start_time, window_end_time,
-                               real_time=real_time_update)
+            add_aux_rectangles(fig_hrate, df_hrate, df_hrate_full, window_start_time, window_end_time, real_time=real_time_update)
 
             # plot calories for each user
-            st.write(df_calories)
-
             grouped_df_calories = df_calories.groupby('user_id')
             for user_id, group in grouped_df_calories:
                 group['datetime'] = pd.to_datetime(group.index)
@@ -957,7 +950,6 @@ def results_page():
             grouped_df_mets = df_mets.groupby('user_id')
             for user_id, group in grouped_df_mets:
                 fig_mets.add_scatter(x=group.index, y=group['value'], name=f'user_id: {user_id}')
-
             fig_mets.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
 
             # plot aligned mets for each user
@@ -1039,6 +1031,7 @@ def results_page():
             df_calories_comp = pd.DataFrame(calories_comp_data)
             df_mets_comp = pd.DataFrame(mets_comp_data)
 
+
             # add the title for the charts
             st.title("Comparison of Average Features for Selected Subject(s) to Control Group's Averages")
             # create three equally sized columns using st.beta_columns
@@ -1050,6 +1043,7 @@ def results_page():
                 fig_bar1 = get_bar_fig(df_heart_rate_comp, label='Heart Rate')
                 # Display chart in Streamlit
                 st.plotly_chart(fig_bar1, use_container_width=False)
+
 
             # plot the second bar chart for calories in col2
             with col2:
@@ -1064,7 +1058,7 @@ def results_page():
                 fig_bar3 = get_bar_fig(df_mets_comp, label='METs')
                 # Display chart in Streamlit
                 st.plotly_chart(fig_bar3, use_container_width=False)
-
+                
             if not real_time_update and session.get('num_time_ranges') > 0:
                 # add the charts for selected ranges
                 st.title("Analysis of Selected Time Ranges")
@@ -1077,7 +1071,7 @@ def results_page():
                     with st.expander(f'##### {range_label}: {range_start} to {range_end}', expanded=False):
                         # Get data for time range
                         time_range_hrate_df = df_hrate_full.loc[range_start:range_end]
-
+                        
                         # Filter data for subjects and control group
                         subjects_range_hrate_df = time_range_hrate_df.loc[
                             time_range_hrate_df['user_id'].isin(subject_ids)]
@@ -1088,11 +1082,11 @@ def results_page():
                         subjects_range_hrate_avg = subjects_range_hrate_df['value'].mean()
                         subjects_range_hrate_min = subjects_range_hrate_df['value'].min()
                         subjects_range_hrate_max = subjects_range_hrate_df['value'].max()
-
+                        
                         control_range_hrate_avg = control_range_hrate_df['value'].mean()
                         control_range_hrate_min = control_range_hrate_df['value'].min()
                         control_range_hrate_max = control_range_hrate_df['value'].max()
-
+                        
                         # visualize metrics in separate columns
                         # create three columns
                         kpi1, kpi2, kpi3 = st.columns(3)
@@ -1101,30 +1095,30 @@ def results_page():
                             value=round(subjects_range_hrate_avg),
                             delta=round(subjects_range_hrate_avg - control_range_hrate_avg)
                         )
-
+                        
                         kpi2.metric(
                             label=f"Minimum Heart-Rate in Time Range ({range_start} to {range_end})",
                             value=round(subjects_range_hrate_min, 2),
                             delta=round(subjects_range_hrate_min - control_range_hrate_min, 2)
                         )
-
+                        
                         kpi3.metric(
                             label=f"Maximum Heart-Rate in Time Range ({range_start} to {range_end})",
                             value=round(subjects_range_hrate_max, 2),
                             delta=round(subjects_range_hrate_max - control_range_hrate_max, 2)
                         )
-
+                        
                         # visualize same metrics in bar charts
                         range_hrate_avg_comp = {
                             'Selected Subject(s) Average': [subjects_range_hrate_avg],
                             'Control Group Average': [control_range_hrate_avg]
                         }
-
+                        
                         range_hrate_min_comp = {
                             'Selected Subject(s) Minimum': [subjects_range_hrate_min],
                             'Control Group Minimum': [control_range_hrate_min]
                         }
-
+                        
                         range_hrate_max_comp = {
                             'Selected Subject(s) Maximum': [subjects_range_hrate_max],
                             'Control Group Maximum': [control_range_hrate_max]
@@ -1149,7 +1143,7 @@ def results_page():
                             fig_bar3 = get_bar_fig(df_range_hrate_max_comp, label='Maximum Heart Rate')
                             # Display chart in Streamlit
                             st.plotly_chart(fig_bar3, use_container_width=False)
-
+            
             # Show the dataframes and export to csv if needed
             st.title("Show/Export Data")
             with st.expander('Click to view more', expanded=False):
@@ -1204,7 +1198,7 @@ def login_page():
         conn = sqlite3.connect('user.db')
         cursor = conn.cursor()
         try:
-            cursor.execute('''select password,salt from users where username = ?''', (username,))
+            cursor.execute('''select password,salt from users where username = ?''',(username,))
             row = cursor.fetchone()
             if row is None:
                 st.error("user not exist!")
@@ -1370,7 +1364,7 @@ def main():
     # dashboard title
     session = st.session_state
     createNav()
-
+    
     # Display the appropriate page based on the session state
     if session is None:
         st.error("Please run the app first.")
@@ -1396,12 +1390,13 @@ def main():
                 del session['selected_users']
             st.experimental_rerun()
 
-        if (session["current_db"] != ""):
-            garmin_df = get_garmin_df(get_db_engine(mixed_db_name=session["current_db"]))
-            garmin_df.age = garmin_df.age.astype(int)
-            garmin_df.weight = garmin_df.weight.astype(int)
-            garmin_df.height = garmin_df.height.astype(int)
-            input_page(garmin_df)
+        if(session["current_db"] != ""):
+            # garmin_df = get_garmin_df(get_db_engine(mixed_db_name=session["current_db"]))
+            # garmin_df.age = garmin_df.age.astype(int)
+            # garmin_df.weight = garmin_df.weight.astype(int)
+            # garmin_df.height = garmin_df.height.astype(int)
+            # input_page(garmin_df)
+            input_page(config=load_config('conf/config.yaml'))
     elif session.get("page") == "import":
         import_page()
     elif session.get("page") == "results":
@@ -1410,6 +1405,7 @@ def main():
         query_history_page()
     elif session.get("page") == "setting":
         setting_page()
+
 
 
 if __name__ == '__main__':

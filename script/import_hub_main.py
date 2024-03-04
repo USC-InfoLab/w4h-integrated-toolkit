@@ -131,61 +131,72 @@ def import_page():
     # option to populate subject table or feature time series tables
     is_subjects_populated = st.checkbox("Populate subject table?")
 
-    if uploaded_file and is_subjects_populated:
-        # set subject table name
-        subject_tbl_name = st.text_input("Enter subject table name", value="subjects")
-        st.success("File uploaded!")
+    if uploaded_file:
+        st.success(f"File `{uploaded_file.name}` uploaded!")
         df = pd.read_csv(uploaded_file)
         st.write("Columns in your CSV:")
         st.write(df.columns)
 
-        if st.button("Populate Database"):
-            populate_subject_table(df, selected_db, config_path, user_tbl_name=subject_tbl_name)
-            st.success("Database populated!")
-
-
-    if uploaded_file and not is_subjects_populated:
-        st.success("File uploaded!")
-        df = pd.read_csv(uploaded_file)
-        # df = generate_mets_by_calories(df)
-        st.write("Columns in your CSV:")
-        st.write(df.columns)
-
-        # Map columns
+        # create a mapping between the csv columns and the database tables
         st.subheader("Mapping")
+        choices = ["None"] + list(df.columns)
+        mappings = {}
+        # if subject table is populated, populate subject table
+        if is_subjects_populated:
+            user_tbl_name = config['mapping']['tables']['user_table']['name']
+            with st.expander(f"**Map subject attributes to the W4H `{user_tbl_name}` table attributes**", expanded=True):
+                st.write(f"Map your CSV columns to corresponding W4H `{user_tbl_name}` table attributes.")
+                for target_attribute in config['mapping']['tables']['user_table']['attributes']:
+                    target_attribute_label = ' '.join([label.capitalize() for label in target_attribute['name'].replace('_', ' ').split()])
+                    st.write(f"**{target_attribute_label}**")
+                    # write the description of the attribute
+                    st.write(f'**Description:** {target_attribute["description"]}')
+                    # write the data type of the attribute
+                    st.write(f'**Data Type:** {target_attribute["type"]}')
+                    def_choice = find_closest_name(choices, target_attribute_label)
+                    mapped_col = st.selectbox("Select Corresponding Column", choices,
+                                            key=target_attribute['name'], index=choices.index(def_choice))
+                    mappings[target_attribute['name']] = mapped_col if mapped_col != "None" else None
+                    st.markdown("""---""")
+            # Once mappings are set, allow the user to populate the database
+            if st.button("Populate Database"):
+                populate_subject_table(df, selected_db, mappings, config_path)
+                st.success(f"Subject table `{user_tbl_name}` populated!")
 
-        # Default selections based on column name similarity
-        default_timestamp = find_closest_name(df.columns, 'time timestamp date start_time end_time')
-        default_user_id = find_closest_name(df.columns, 'user id email patient')
 
-        timestamp_col = st.selectbox("**Select Timestamp Column**", df.columns, index=df.columns.get_loc(default_timestamp))
-        user_id_col = st.selectbox("**Select User ID Column**", df.columns, index=df.columns.get_loc(default_user_id))
+        # else, populate feature time series tables
+        else:
+            # Default selections based on column name similarity
+            default_timestamp = find_closest_name(df.columns, 'time timestamp date start_time end_time')
+            default_user_id = find_closest_name(df.columns, 'user id email patient')
 
-        # Foldable block for optional mappings
-        mappings = {
-            config['mapping']['columns']['timestamp']: timestamp_col,
-            config["mapping"]['columns']['user_id']: user_id_col,
-        }
-        table_mappings = {}
-        with st.expander("**Map Features to W4H Tables**", expanded=True):
-            st.write("Map your CSV columns to corresponding W4H tables.")
-            
-            choices = ["None"] + list(df.columns)
-            for target_table_name in config['mapping']['tables']['time_series'] + config['mapping']['tables']['geo']:
-                target_table_label = ' '.join([label.capitalize() for label in target_table_name.replace('_', ' ').split()])
-                st.subheader(target_table_label)
-                def_choice = find_closest_name(choices, target_table_label)
-                mapped_col = st.selectbox("Select Corresponding Column", choices, 
-                                        key=target_table_name, index=choices.index(def_choice))
-                table_mappings[target_table_name] = mapped_col if mapped_col != "None" else None
+            timestamp_col = st.selectbox("**Select Timestamp Column**", df.columns, index=df.columns.get_loc(default_timestamp))
+            user_id_col = st.selectbox("**Select User ID Column**", df.columns, index=df.columns.get_loc(default_user_id))
 
-        # Once mappings are set, allow the user to populate the database
-        if st.button("Populate Database"):
-            mappings = {**mappings, **table_mappings}
+            # Foldable block for optional mappings
+            mappings = {
+                config['mapping']['columns']['timestamp']: timestamp_col,
+                config["mapping"]['columns']['user_id']: user_id_col,
+            }
+            table_mappings = {}
+            with st.expander("**Map Features to W4H Tables**", expanded=True):
+                st.write("Map your CSV columns to corresponding W4H tables.")
 
-            populate_db(df, selected_db, mappings, config_path)
-            st.success("Database populated!")
+                choices = ["None"] + list(df.columns)
+                for target_table_name in config['mapping']['tables']['time_series'] + config['mapping']['tables']['geo']:
+                    target_table_label = ' '.join([label.capitalize() for label in target_table_name.replace('_', ' ').split()])
+                    st.subheader(target_table_label)
+                    def_choice = find_closest_name(choices, target_table_label)
+                    mapped_col = st.selectbox("Select Corresponding Column", choices,
+                                            key=target_table_name, index=choices.index(def_choice))
+                    table_mappings[target_table_name] = mapped_col if mapped_col != "None" else None
 
+            # Once mappings are set, allow the user to populate the database
+            if st.button("Populate Database"):
+                mappings = {**mappings, **table_mappings}
+
+                populate_db(df, selected_db, mappings, config_path)
+                st.success("GeoMTS tables populated!")
 
 # if __name__ == "__main__":
 #     main()

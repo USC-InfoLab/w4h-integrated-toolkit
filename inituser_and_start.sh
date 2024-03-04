@@ -10,4 +10,4 @@ wget
 lsb_release
 gnupg
 service postgresql start
-/etc/postgresql/{version}/main/pg_hba.
+/etc/postgresql/{version}/main/pg_hba.conf

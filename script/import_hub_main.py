@@ -80,6 +80,12 @@ def generate_mets_by_calories(df):
     return df
 
 def import_page():
+    st.subheader("Database Manage")
+    if st.button("Edit Database Settings"):
+        st.session_state["page"] = "setting"
+        st.experimental_rerun()
+
+
     """Main function for the streamlit app"""
     # Load the config
     config = load_config(config_file=CONFIG_FILE)
@@ -100,7 +106,7 @@ def import_page():
     # Handling the chosen option
     if database_option == db_selection_options[0]:
         # `get_existing_databases()` retrieves the list of existing databases.
-        existing_databases = get_existing_databases(config_path)  # This function needs to be implemented.
+        existing_databases = get_existing_databases()  # This function needs to be implemented.
         
         selected_db = st.selectbox("**Select an existing database**", existing_databases)
         
@@ -132,7 +138,7 @@ def import_page():
         st.write(df.columns)
 
         # create a mapping between the csv columns and the database tables
-        st.subheader("Mapping")       
+        st.subheader("Mapping")
         choices = ["None"] + list(df.columns)
         mappings = {}
         # if subject table is populated, populate subject table
@@ -148,7 +154,7 @@ def import_page():
                     # write the data type of the attribute
                     st.write(f'**Data Type:** {target_attribute["type"]}')
                     def_choice = find_closest_name(choices, target_attribute_label)
-                    mapped_col = st.selectbox("Select Corresponding Column", choices, 
+                    mapped_col = st.selectbox("Select Corresponding Column", choices,
                                             key=target_attribute['name'], index=choices.index(def_choice))
                     mappings[target_attribute['name']] = mapped_col if mapped_col != "None" else None
                     st.markdown("""---""")
@@ -156,7 +162,7 @@ def import_page():
             if st.button("Populate Database"):
                 populate_subject_table(df, selected_db, mappings, config_path)
                 st.success(f"Subject table `{user_tbl_name}` populated!")
-                
+
 
         # else, populate feature time series tables
         else:
@@ -175,13 +181,13 @@ def import_page():
             table_mappings = {}
             with st.expander("**Map Features to W4H Tables**", expanded=True):
                 st.write("Map your CSV columns to corresponding W4H tables.")
-                
+
                 choices = ["None"] + list(df.columns)
                 for target_table_name in config['mapping']['tables']['time_series'] + config['mapping']['tables']['geo']:
                     target_table_label = ' '.join([label.capitalize() for label in target_table_name.replace('_', ' ').split()])
                     st.subheader(target_table_label)
                     def_choice = find_closest_name(choices, target_table_label)
-                    mapped_col = st.selectbox("Select Corresponding Column", choices, 
+                    mapped_col = st.selectbox("Select Corresponding Column", choices,
                                             key=target_table_name, index=choices.index(def_choice))
                     table_mappings[target_table_name] = mapped_col if mapped_col != "None" else None
 

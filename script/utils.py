@@ -1,5 +1,5 @@
 import sqlite3
-import openai 
+import openai
 import datetime
 
 import yaml
@@ -50,15 +50,18 @@ def load_config(config_file: str) -> dict:
             return yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             print(exc)
+def save_config(config_file,config):
+    with open(config_file, 'w') as file:
+        yaml.dump(config, file)
 
-def getServerIdByNickname(config_file: str='conf/config.yaml', nickname='local db'):
+def getServerIdByNickname(config_file: str='conf/db_config.yaml', nickname='local db'):
     config = load_config(config_file)
     server_number = config['database_number']
     for i in range(1,server_number+1):
         if(config["database"+str(i)]['nickname'] == nickname):
             return i
     raise Exception("No such nickname: \""+nickname+"\"")
-def get_db_engine(config_file: str='conf/config.yaml',db_server_id = 1, db_server_nickname = None, db_name=None,mixed_db_name=None) -> sqlalchemy.engine.base.Engine:
+def get_db_engine(config_file: str='conf/db_config.yaml',db_server_id = 1, db_server_nickname = None, db_name=None,mixed_db_name=None) -> sqlalchemy.engine.base.Engine:
     """Create a SQLAlchemy Engine instance based on the config file
 
     Args:
@@ -93,7 +96,6 @@ def get_db_engine(config_file: str='conf/config.yaml',db_server_id = 1, db_serve
 
     # creating SQLAlchemy Engine instance
     con_str = f'postgresql://{db_user_encoded}:{db_pass_encoded}@{db_host}:{db_port}/{db_name}'
-    print(con_str)
     db_engine = create_engine(con_str, echo=True)
 
     return db_engine

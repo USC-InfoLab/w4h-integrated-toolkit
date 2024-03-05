@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import traceback
 import pickle
@@ -19,10 +20,13 @@ from script.nav import createNav
 from script.import_hub_main import import_page
 import geopandas as gpd
 from shapely import wkb
-from script.utils import get_db_engine, parse_query
+
+
+from script.query_history import query_history
+from script.utils import get_db_engine, load_config, save_config
 
 import os
-
+import plotly.express as px
 
 # ptvsd.enable_attach(address=('localhost', 5678))
 
@@ -41,6 +45,7 @@ USC_CENTER_Y = 34.0224
 USC_CENTER_X = -118.2851
 
 currentDbName = ""
+db_config_path = 'conf/db_config.yaml'
 
 
 # get db engine
@@ -64,13 +69,35 @@ def get_users_df(db_conn, config, pattern=None):
 
 
 def calculate_mets(cal_df, user_weights=None):
-    if not user_weights:
+    if not user_weights or len(user_weights) == 0:
         print('no user weights provided, using default')
         user_weights = dict(zip(cal_df.user_id.unique(), np.ones(cal_df.user_id.nunique()) * 70))
     mets_df = cal_df.copy()
-    mets_df['value'] = mets_df.apply(lambda x: x['value'] / (user_weights[x['user_id']] * 0.25), axis=1)
+    mets_df['value'] = mets_df['value'] * 4.186
 
-    return mets_df
+    mets_df['value'] = mets_df.apply(lambda x: x['value'] / (user_weights[x['user_id']]), axis=1)
+
+    grouped = mets_df.groupby('user_id')
+
+
+    calibrated_df = pd.DataFrame()
+    for name, group in grouped:
+        # st.write(name)
+        # st.write(group.index[0])
+        group['datetime'] = pd.to_datetime(group.index)
+        # Calibrate each user's mets column with a baseline value of 1
+        baseline = 1.00 / group['value'].mean()
+        group['value'] = group['value'] * baseline
+
+        group['days_since_start'] = (group.datetime - group.datetime.iloc[0]).dt.total_seconds() / (24 * 3600)
+        group['value'] = np.where(group['days_since_start'].diff().shift(-1) > 0.5, None, group['value'])
+
+
+        calibrated_df = pd.concat([calibrated_df, group])
+
+
+    # calibrated_df.reset_index(drop=True, inplace=True)
+    return calibrated_df
     # return pd.DataFrame(columns=['user_id', 'timestamp', 'value'])
 
 
@@ -90,7 +117,7 @@ SERVER_URL = f"http://{HOST}:{PORT}"
 # read data from Flask server (real-time) or from database (historical)
 def get_data(session=None, real_time=False) -> pd.DataFrame:
     if real_time:
-        response = requests.get(SERVER_URL,params={'db_name':st.session_state["current_db"]})
+        response = requests.get(SERVER_URL, params={'db_name': st.session_state["current_db"]})
         data = response.json()
         # df_hrate = pd.DataFrame(data)
         df_hrate = pd.DataFrame(data['heart_rates'])
@@ -110,15 +137,21 @@ def get_data(session=None, real_time=False) -> pd.DataFrame:
         end_date = session.get('end_date')
         db_conn = get_db_engine(mixed_db_name=session["current_db"])
         # query heart rate
-        df_hrate = pd.read_sql(f"SELECT * FROM {DB_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)", db_conn, params=[start_date, end_date])
+        df_hrate = pd.read_sql(
+            f"SELECT * FROM {DB_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)", db_conn,
+            params=[start_date, end_date])
         df_hrate.sort_values(by=['timestamp'], inplace=True)
         # query calories
-        df_calories = pd.read_sql(f"SELECT * FROM {DB_CALORIES_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)", db_conn, params=[start_date, end_date])
+        df_calories = pd.read_sql(
+            f"SELECT * FROM {DB_CALORIES_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)",
+            db_conn, params=[start_date, end_date])
         df_calories.sort_values(by=['timestamp'], inplace=True)
         # query coordinates
-        df_coords = gpd.read_postgis(f"SELECT * FROM {DB_COORDINATES_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)", db_conn, params=[start_date, end_date], geom_col='value')
+        df_coords = gpd.read_postgis(
+            f"SELECT * FROM {DB_COORDINATES_TABLE} WHERE Date(timestamp) >= Date(%s) AND Date(timestamp) <= Date(%s)",
+            db_conn, params=[start_date, end_date], geom_col='value')
         df_coords.sort_values(by=['timestamp'], inplace=True)
-        
+
     df_hrate['timestamp'] = pd.to_datetime(df_hrate['timestamp'])
     df_hrate = df_hrate.set_index('timestamp')
     df_calories['timestamp'] = pd.to_datetime(df_calories['timestamp'])
@@ -137,9 +170,9 @@ def get_control_stats(df_hrate_all, df_calories_all, df_mets_all, control_ids):
     stats['heart_rate'] = {'max': df_hrate.value.max(), 'min': df_hrate.value.min(),
                            'avg': df_hrate.value.mean(), 'std': df_hrate.value.std()}
     stats['calories'] = {'max': df_calories.value.max(), 'min': df_calories.value.min(),
-                            'avg': df_calories.value.mean(), 'std': df_calories.value.std()}
+                         'avg': df_calories.value.mean(), 'std': df_calories.value.std()}
     stats['mets'] = {'max': df_mets.value.max(), 'min': df_mets.value.min(),
-                            'avg': df_mets.value.mean(), 'std': df_mets.value.std()}
+                     'avg': df_mets.value.mean(), 'std': df_mets.value.std()}
     return stats
 
 
@@ -227,8 +260,8 @@ def add_aux_rectangles(fig, df, df_full, window_start, window_end, real_time=Fal
 
 def get_bar_fig(df, label='Feature'):
     fig = px.bar(
-                x=df.columns.tolist(),
-                y=df.values.flatten().tolist()
+        x=df.columns.tolist(),
+        y=df.values.flatten().tolist()
     )
 
     fig.update_layout(
@@ -252,8 +285,10 @@ def get_map_legend(color_lookup):
     # legend_markdown = "<br>".join([f"<span style='color:{leg['color']}'> &#9679; </span>{leg['text']}" for leg in map_legend_lookup])
     # return st.markdown(legend_markdown, unsafe_allow_html=True)
     map_legend_lookup = [{'text': t, 'color': rgb_to_hex(c)} for t, c in color_lookup.items()]
-    legend_markdown = "  \n".join([f"<span style='color:{leg['color']}'> &#9679; </span>{leg['text']}" for leg in map_legend_lookup])
-    return st.markdown(f"<p style='font-size: 16px; font-weight: bold;'>Map Legend</p>{legend_markdown}", unsafe_allow_html=True)
+    legend_markdown = "  \n".join(
+        [f"<span style='color:{leg['color']}'> &#9679; </span>{leg['text']}" for leg in map_legend_lookup])
+    return st.markdown(f"<p style='font-size: 16px; font-weight: bold;'>Map Legend</p>{legend_markdown}",
+                       unsafe_allow_html=True)
 
 
 # Define function to create Pydeck layer
@@ -373,7 +408,7 @@ def create_filter_dict(attributes, config, selected_attrs):
         item['value'] = selected_attrs[attribute['name']]
         filter_dict[attribute['name']] = item
     return filter_dict
-    
+
 
 def filter_users(df, attributes, ignore_nulls=True):
     for attribute in attributes.values():
@@ -404,10 +439,10 @@ def input_page(config):
     if session is None:
         st.error("Please run the app first.")
         return
-    
+
     # get the user table config
     user_config = config['mapping']['tables']['user_table']
-    
+
     # Connect to the database
     db_conn = get_db_engine(mixed_db_name=session["current_db"])
     # get the list of user id's
@@ -432,9 +467,9 @@ def input_page(config):
             temp_select_users = selected_users
         else:
             temp_select_users = user_ids
-        
+
     selected_subj_attributes = dict()
-    
+
     attrs_size_per_row = config['display_options']['input_page']['attributes_per_row_size']
     default_attr_values = create_default_values(user_config['attributes'], db_conn, config)
     if subject_selection_type == 'attribute':
@@ -453,10 +488,11 @@ def input_page(config):
     st.header("Select Control Group")
     # add selector for user
     control_selection_options = ['all', 'id', 'attribute']
-    control_selection_type = st.radio("Select control group (either as all studied individuals or filter by id or attribute)?", 
-                                      control_selection_options,
-                                      index=session.get('control_selection_type', 0))
-    
+    control_selection_type = st.radio(
+        "Select control group (either as all studied individuals or filter by id or attribute)?",
+        control_selection_options,
+        index=session.get('control_selection_type', 0))
+
     selected_users_control = []
     if control_selection_type == 'id':
         selected_users_control = st.multiselect(
@@ -470,7 +506,7 @@ def input_page(config):
             temp_select_users_control = user_ids
 
 
-        
+
     selected_control_attributes = dict()
     if control_selection_type == 'attribute':
         st.subheader("Select Control Group Attributes")
@@ -499,7 +535,7 @@ def input_page(config):
         session.get("end_date", datetime.datetime.strptime(END_TIME, '%Y-%m-%d %H:%M:%S'))
         )
 
-        
+
         st.markdown("#### Need to analyze specific time range? Select how many range(s) you want to analyze.")
         num_time_ranges = st.selectbox("Select how many time range(s) you want to analyze", range(0, 10), 
                                        index=session.get('num_time_ranges', 3))
@@ -529,8 +565,6 @@ def input_page(config):
                     # st.divider()
                 time_ranges = updated_ranges
                 time_ranges_labels = updated_range_labels
-
-
     else:
         col1, col2 = st.columns(2)
         with col1:
@@ -547,7 +581,7 @@ def input_page(config):
     if real_time_update:
         window_size = st.number_input('Window Size (seconds)', value=session.get("window_size", DEFAULT_WINDOW_SIZE), step=15)
         TIMEOUT = st.number_input('Fast Forward (Every 1 Hour Equals How Many Seconds?)', value=session.get('timeout', float(TIMEOUT)), step=float(1), format="%.1f", min_value=0.1, max_value=float(100))
-    
+
         
     # Add a button to go to the results page
     if st.button("Show Results"):
@@ -580,7 +614,7 @@ def input_page(config):
         for name, value in selected_control_attributes.items():
             session[f'selected_control_{name}'] = value
 
-        
+
         # get full user table
         user_df = get_users_df(db_conn, config)
         user_id_col_name = config['mapping']['columns']['user_id']
@@ -604,19 +638,15 @@ def input_page(config):
         session['subjects_df'] = subjects_df
         session['control_df'] = control_df
 
-        session_copy = session
-        saveSessionByUsername(session_copy)
+        q = query_history(session)
+        # print('q:qqqq: ',q)
+        getSessionByUsername(q.data['login-username'])
+        saveSessionByUsername(q)
 
         # Go to the results page
         session['page'] = "results"
 
         st.experimental_rerun()
-
-
-
-
-
-
 
 
 # Define the results page
@@ -633,7 +663,7 @@ def results_page(config):
     subject_ids = subjects_df[user_id_col_name].tolist()
     control_df = session.get('control_df')
     control_ids = control_df[user_id_col_name].tolist()
-    
+
     window_size = session['window_size']
     real_time_update = session['real_time_update']
     
@@ -649,7 +679,7 @@ def results_page(config):
         st.session_state['df_calories_full'] = pd.DataFrame()
         st.session_state['df_coords_full'] = gpd.GeoDataFrame()
 
-    
+
     if 'df_hrate_full' not in st.session_state or 'df_calories_full' not in st.session_state or 'df_coords_full' not in st.session_state:
         st.session_state['df_hrate_full'] = pd.DataFrame()
         st.session_state['df_calories_full'] = pd.DataFrame()
@@ -732,7 +762,8 @@ def results_page(config):
         df_calories = df_calories_full.loc[df_calories_full['user_id'].isin(subject_ids)]
         df_coords = df_coords_full.loc[df_coords_full['user_id'].isin(subject_ids)]
         df_mets = df_mets_full.loc[df_mets_full['user_id'].isin(subject_ids)]
-        
+        df_email_date_range = df_mets.groupby('user_id')['datetime'].agg(start_date='min', end_date='max')
+        df_email_date_range = df_email_date_range.reset_index().rename(columns={'user_id': 'user_id'})
         # creating KPIs
         avg_heart_rate = df_hrate['value'].mean()
         min_heart_rate = df_hrate['value'].min()
@@ -784,8 +815,8 @@ def results_page(config):
         for user_id in df_coords["user_id"].unique():
             user_data = df_coords[df_coords["user_id"] == user_id]
             df = pd.DataFrame(columns=['coordinates', 'width'])
-            dict = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
-            df = df.append(dict,ignore_index=True)
+            coordinate_dict = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
+            df = df.append(coordinate_dict,ignore_index=True)
             layers += create_layer(df, color_lookup[user_id])
             # user_trajectories[user_id] = {"coordinates": [[y,x] for y,x in zip(user_data.value.y,user_data.value.x)], "width": 5}
 
@@ -893,8 +924,10 @@ def results_page(config):
             fig_hrate = go.Figure()
             fig_calories = go.Figure()
             fig_mets = go.Figure()
+            fig_aligned_mets = go.Figure()
+            fig_project_dates = px.timeline(df_email_date_range, x_start="start_date", x_end="end_date", y="user_id",
+                                            color="user_id")
 
-            
             grouped_df_hrate = df_hrate.groupby('user_id')
             
             for user_id, group in grouped_df_hrate:
@@ -907,7 +940,10 @@ def results_page(config):
             # plot calories for each user
             grouped_df_calories = df_calories.groupby('user_id')
             for user_id, group in grouped_df_calories:
-                fig_calories.add_scatter(x=group.index, y=group['value'], name=f'user_id: {user_id}')
+                group['datetime'] = pd.to_datetime(group.index)
+                # group['value'] = np.where(group['datetime'].diff().shift(-1) > timedelta(hours=2), None, group['value'])
+                fig_calories.add_bar(x=group.index, y=group['value'], name=f'user_id: {user_id}')
+                # fig_calories.add_scatter(x=group.index, y=group['value'], name=f'user_id: {user_id}')
             fig_calories.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
             # add_aux_rectangles(fig_calories, df_calories, df_calories_full, window_start_time, window_end_time, real_time=real_time_update)
 
@@ -917,7 +953,46 @@ def results_page(config):
                 fig_mets.add_scatter(x=group.index, y=group['value'], name=f'user_id: {user_id}')
             fig_mets.update_layout(xaxis_title='Timestamp', yaxis_title='Value')
 
-            
+            # plot aligned mets for each user
+            # print('df_mets_full: ',df_mets_full)
+            # print('df_mets: ',df_mets)
+            # st.write('df_mets_full')
+            # st.write(df_mets_full)
+            # st.write('df_mets')
+            # st.write(df_mets)
+            for user_id, group in grouped_df_mets:
+                # st.write(user_id)
+                # st.write(group)
+                fig_aligned_mets.add_scatter(x=group.days_since_start, y=group['value'], name=f'user_id: {user_id}')
+            fig_aligned_mets.update_layout(
+                xaxis=dict(
+                    rangeslider=dict(
+                        visible=True
+                    ),
+                    tickformat=".2f",
+                    title="Days (Decimal)",
+                    # type="date"
+                ),
+                title='METS with available days',
+                yaxis_title='Mets'
+            )
+            fig_project_dates.update_layout(
+                xaxis_title='Time',
+                yaxis_title='User Email',
+                title='User Activity Duration',
+                xaxis=dict(
+                    rangeselector=dict(
+                        buttons=list([
+                            dict(count=7, label='1w', step='day', stepmode='backward'),
+                            dict(count=1, label='1m', step='month', stepmode='backward'),
+                            dict(count=6, label='6m', step='month', stepmode='backward'),
+                            dict(step='all')
+                        ])
+                    ),
+                    type='date'
+                )
+            )
+
             st.markdown("### Heart-Rate Plot")
             # st.write(fig_hrate)
             st.plotly_chart(fig_hrate, use_container_width=True)
@@ -928,7 +1003,13 @@ def results_page(config):
                 st.markdown("#### METs plot")
                 # st.write(fig_mets)
                 st.plotly_chart(fig_mets, use_container_width=True)
-            
+                st.markdown("#### Aligned METs plot")
+                # st.write(fig_aligned_mets)
+                st.plotly_chart(fig_aligned_mets, use_container_width=True)
+
+                st.markdown("#### Projected Start and End Dates")
+                st.plotly_chart(fig_project_dates, use_container_width=True)
+
             # st.line_chart(df['value'])
             # add barcharts to compare mean features to the global mean stats
             heart_rate_comp_data = {
@@ -993,9 +1074,11 @@ def results_page(config):
                         time_range_hrate_df = df_hrate_full.loc[range_start:range_end]
                         
                         # Filter data for subjects and control group
-                        subjects_range_hrate_df = time_range_hrate_df.loc[time_range_hrate_df['user_id'].isin(subject_ids)]
-                        control_range_hrate_df = time_range_hrate_df.loc[time_range_hrate_df['user_id'].isin(control_ids)]
-                        
+                        subjects_range_hrate_df = time_range_hrate_df.loc[
+                            time_range_hrate_df['user_id'].isin(subject_ids)]
+                        control_range_hrate_df = time_range_hrate_df.loc[
+                            time_range_hrate_df['user_id'].isin(control_ids)]
+
                         # get stats for time range for each group
                         subjects_range_hrate_avg = subjects_range_hrate_df['value'].mean()
                         subjects_range_hrate_min = subjects_range_hrate_df['value'].min()
@@ -1106,6 +1189,7 @@ def results_page(config):
 
 def login_page():
     st.title("User login")
+
     username = st.text_input("username")
     password = st.text_input("password", type="password")
 
@@ -1137,27 +1221,36 @@ def login_page():
             st.error("something wrong in the server")
         conn.close()
 
+
 def query_history_page():
     session = st.session_state
+
+    st.markdown('Query History')
     username = session.get('login-username')
     query_history = getSessionByUsername(username)
-    # print("query history:",query_history)
-    for i, item in enumerate(query_history):
-        if(i == 1):
-            break
-        button_label = f"{item.get('temp_select_users')[0]} : from {item.get('start_date')} to {item.get('end_date')}"
-        if st.button(button_label):
-            session = item;
-            session['page'] = "results"
-            st.experimental_rerun()
-                # st.write(f"Clicked on {button_label}, corresponding array item: {item}")
-    st.markdown('Query History')
 
+    st.write(f"Total {len(query_history)} queries")
+    for i, query in enumerate(query_history):
+        keys_list = list(query.data.keys())
+        button_label = f"{query.get('selected_users')} :  {query.get('start_date')} ~ {query.get('end_date')}"
+        with st.expander(button_label, expanded=False):
+
+            if st.button('query again', key=f'query again {i}'):
+                query.setSession(session)
+                session['page'] = "results"
+                st.experimental_rerun()
+            for key in keys_list:
+                if (key.startswith('df_') or key.endswith('_df')):
+                    continue
+                st.markdown(f"<font color='gray' size='2'>{key} : {query.data.get(key)}</font>",
+                            unsafe_allow_html=True)
+
+                # st.write(f"{key} : {query.data.get(key)}")
 
 
 def tutorial_page():
     st.markdown('Build your config file from here:  ')
-    st.markdown('[Tutorial](https://chickensellerred.github.io/)')
+    st.markdown('[Tutorial](https://w4h-tutorial.vercel.app/)')
     st.markdown('Then upload here:  ')
     #
     # if page == "Setting up":
@@ -1168,22 +1261,109 @@ def tutorial_page():
     #         markdown_text = markdown_file.read()
     # st.markdown(markdown_text, unsafe_allow_html=True)
     # if page == "Setting up":
-    config_file = st.file_uploader("Upload config file", type=['yaml', 'example','txt'])
+    config_file = st.file_uploader("Upload config file", type=['yaml', 'example', 'txt'])
     update_config = st.button("Update config")
     if config_file is not None and update_config:
         conf_dir = 'conf'
         if not os.path.exists(conf_dir):
             os.makedirs(conf_dir)
-        with open(f'{conf_dir}/config.yaml', 'w') as f:
+        with open(db_config_path, 'w') as f:
             # write content as string data into the file
             f.write(config_file.getvalue().decode("utf-8"))
         st.success("Update success!")
 
+def setting_page():
+    st.title("Database Management")
+
+    config = load_config(db_config_path)
+    if 'database_number' not in config:
+        st.error('key wrong: "database_number" in config')
+        return
+    if config['database_number'] == 0:
+            st.subheader("no saved databases")
+    if config['database_number'] != 0:
+        for i in range(1, config['database_number'] + 1):
+            db_key = f'database{i}'
+            if db_key in config:
+                db_config = config[db_key]
+            with st.expander(f"Database {i} - {db_config['nickname']} ({db_config['dbms']})", expanded=False):
+                c1,c2 = st.columns([1,10])
+                with c1:
+                    is_deleting = st.button('❌', help = 'delete', key=f'delete_{i}')
+                    is_saving = st.button('💾', help = 'save', key = f'save_{i}')  # 添加保存按钮
+
+
+                with c2:
+
+                    nickname = st.text_input("Nickname", db_config['nickname'],key=f'nickname_{i}')
+                    dbms = st.selectbox("DBMS", ['postgresql', 'mysql', 'sqlite'],
+                                        index=['postgresql', 'mysql', 'sqlite'].index(db_config['dbms']), key=f'selectbox_{i}')
+                    host = st.text_input("Host", db_config['host'],key=f'host_{i}')
+                    port = st.text_input("Port", db_config['port'],key=f'port_{i}')
+                    user = st.text_input("User", db_config['user'],key=f'user_{i}')
+                    password = st.text_input("Password", db_config['password'], type="password",key=f'password_{i}')
+                    if is_saving:
+                        print(f'is_saving: {is_saving}')
+                        config[db_key] = {
+                            'nickname': nickname,
+                            'dbms': dbms,
+                            'host': host,
+                            'port': port,
+                            'user': user,
+                            'password': password
+                        }
+                        save_config(db_config_path,config)
+                        st.experimental_rerun()  # 重新运行应用
+
+                    if is_deleting:
+                        # 提供删除选项
+                        config.pop(db_key)
+                        for j in range(i,config['database_number'] + 1):
+                            if j == config['database_number']:
+                                if i!=j:
+                                    config.pop(f'database{j}')
+                            else:
+                                config[f'database{j}'] = config[f'database{j+1}']
+                        config['database_number'] -= 1
+                        save_config(db_config_path, config)
+                        st.experimental_rerun()  # 重新运行应用
+
+
+
+    # 添加新数据库配置
+    with st.form("new_db"):
+        st.write("Add New Database")
+        nickname = st.text_input("Nickname")
+        dbms = st.selectbox("DBMS", ['postgresql', 'mysql', 'sqlite'])
+        host = st.text_input("Host")
+        port = st.text_input("Port")
+        user = st.text_input("User")
+        password = st.text_input("Password", type="password")
+
+        submitted = st.form_submit_button("Add Database")
+        if submitted:
+            # 添加数据库逻辑
+            new_db_key = f'database{config["database_number"] + 1}'
+            config[new_db_key] = {
+                'nickname': nickname,
+                'dbms': dbms,
+                'host': host,
+                'port': port,
+                'user': user,
+                'password': password
+            }
+            config['database_number'] += 1
+            save_config(db_config_path ,config)
+            st.experimental_rerun()  # 重新运行应用
+
+    # 总体保存按钮
+    st.write("")  # 添加一行空白
+    if st.button("Save All", ):
+        save_config(db_config_path,config)
 
 
 def main():
     # dashboard title
-    st.title("W4H Integrated Toolkit")
     session = st.session_state
     createNav()
     
@@ -1193,7 +1373,7 @@ def main():
         return
     if session.get("page") == "tutorial":
         tutorial_page()
-    elif session.get("login-state",False) == False or session.get("page","login") == "login":
+    elif session.get("login-state", False) == False or session.get("page", "login") == "login":
         login_page()
     elif session.get("page") == "input":
         # if session doesn't contain key "current_db"
@@ -1202,7 +1382,7 @@ def main():
         # show a drop list to choose current db
 
         pre_current_db = session.get('current_db')
-        exist_databases = [""]+get_existing_databases()
+        exist_databases = [""] + get_existing_databases()
         session["current_db"] = st.selectbox("Select a database", exist_databases, index=exist_databases.index(
             pre_current_db) if pre_current_db in exist_databases else 0)
         if pre_current_db != session.get('current_db'):
@@ -1225,6 +1405,9 @@ def main():
         results_page(config=load_config('conf/config.yaml'))
     elif session.get("page") == "query_history":
         query_history_page()
+    elif session.get("page") == "setting":
+        setting_page()
+
 
 
 if __name__ == '__main__':

@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+<<<<<<< HEAD
+=======
+  <component name="Black">
+    <option name="sdkName" value="Python 3.8 (applewatch-w4h-demo)" />
+  </component>
+>>>>>>> 5336d8cbb43d02384e2ba0e67982f8b5efe19783
   <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.8 (applewatch-w4h-demo)" project-jdk-type="Python SDK" />
 </project>

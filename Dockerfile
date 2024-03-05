@@ -10,3 +10,4 @@ RUN chmod +x /app/inituser_and_start.sh
 
 CMD ["./inituser_and_start.sh"]
 
+

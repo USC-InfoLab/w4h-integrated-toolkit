@@ -3,7 +3,7 @@ import os
 import sqlite3
 import json
 import pickle
-
+import streamlit as st
 from loguru import logger
 import pandas as pd
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String, ForeignKey, DateTime, REAL, Integer, Float, Boolean
@@ -25,7 +25,7 @@ def create_tables(db_server_nickname:str, db_name: str, config_file='conf/config
     """
     metadata = MetaData()
     config = load_config(config_file=config_file)
-    db_engine = get_db_engine(config_file, db_server_nickname=db_server_nickname, db_name=db_name)
+    db_engine = get_db_engine(db_server_nickname=db_server_nickname, db_name=db_name)
     # try:
     columns_config = config["mapping"]["columns"]
 
@@ -66,7 +66,7 @@ def create_w4h_instance(db_server:str, db_name: str, config_file='conf/config.ya
         db_name (str): Name of the database to create
         config_file (str, optional): Path to the config file. Defaults to 'conf/config.yaml'.
     """
-    db_engine_tmp = get_db_engine(config_file,db_server_nickname=db_server)
+    db_engine_tmp = get_db_engine(db_server_nickname=db_server)
     try:
         logger.info('Database engine created!')
         # Execute the SQL command to create the database if it doesn't exist
@@ -81,7 +81,7 @@ def create_w4h_instance(db_server:str, db_name: str, config_file='conf/config.ya
     except Exception as err:
         logger.error(err)
         db_engine_tmp.dispose()
-    db_engine = get_db_engine(config_file,db_server_nickname=db_server, db_name=db_name)
+    db_engine = get_db_engine(db_server_nickname=db_server, db_name=db_name)
     try:
         # Enable PostGIS extension
         with db_engine.connect() as connection:
@@ -97,7 +97,7 @@ def create_w4h_instance(db_server:str, db_name: str, config_file='conf/config.ya
     logger.success(f"W4H tables initialized!")
     
     
-def get_existing_databases(config_file='conf/config.yaml') -> list:
+def get_existing_databases(config_file='conf/db_config.yaml') -> list:
     """Get a list of all existing databases
 
     Args:
@@ -110,7 +110,7 @@ def get_existing_databases(config_file='conf/config.yaml') -> list:
     config = load_config(config_file=config_file)
     database_number = config['database_number']
     for i in range(1,database_number+1):
-        db_engine = get_db_engine(config_file,db_server_id=i)
+        db_engine = get_db_engine(db_server_id=i)
         try:
             with db_engine.connect() as connection:
                 result = connection.execute(text("SELECT datname FROM pg_database WHERE datistemplate = false;"))
@@ -122,7 +122,7 @@ def get_existing_databases(config_file='conf/config.yaml') -> list:
             return db_list
     return db_list
 
-def get_existing_database_server(config_file='conf/config.yaml') -> list:
+def get_existing_database_server(config_file='conf/db_config.yaml') -> list:
     db_list_server = []
     config = load_config(config_file=config_file)
     database_number = config['database_number']
@@ -153,7 +153,7 @@ def populate_tables(df: pd.DataFrame, db_name: str, mappings: dict, config_path=
     user_table_name = config['mapping']['tables']['user_table']['name']
 
     # Create a session
-    engine = get_db_engine(config_path, mixed_db_name=db_name)
+    engine = get_db_engine(mixed_db_name=db_name)
     Session = sessionmaker(bind=engine)
     session = Session()
     
@@ -219,7 +219,7 @@ def populate_subject_table(df: pd.DataFrame, db_name: str, mappings: dict, confi
     config = load_config(config_path)
 
     # Create a session
-    engine = get_db_engine(config_path, mixed_db_name=db_name)
+    engine = get_db_engine(mixed_db_name=db_name)
 
     # create a user table dataframe using the mappings
     user_tbl_name = config['mapping']['tables']['user_table']['name']
@@ -252,7 +252,7 @@ def updateCurrentDbByUsername(username,currentDb):
 def saveSessionByUsername(session):
     with sqlite3.connect('user.db') as conn:
         cursor = conn.cursor()
-        cursor.execute('''select query_history from users where username = ?''',(session.get('login-username'),))
+        cursor.execute('''select query_history from users where username = ?''',(session.data.get('login-username'),))
         result = cursor.fetchone()
         conn.commit()
     query_history = pickle.loads(result[0])
@@ -262,7 +262,7 @@ def saveSessionByUsername(session):
 
     with sqlite3.connect('user.db') as conn:
         cursor = conn.cursor()
-        cursor.execute('''UPDATE users SET query_history = ? WHERE username = ?''', (serialized_object,session['login-username'],))
+        cursor.execute('''UPDATE users SET query_history = ? WHERE username = ?''', (serialized_object,session.data['login-username'],))
         conn.commit()
 
 def getSessionByUsername(username):

@@ -1,0 +1,23 @@
+database_number: 0
+mapping:
+  columns:
+    timestamp: timestamp
+    user_id: user_id
+    value: value
+  tables:
+    geo:
+    - locations
+    time_series:
+    - heart_rates
+    - calories
+    - mets
+    - distances
+    - steps
+    - sleep
+    - weight
+    user_table:
+      columns:
+        device: String(50)
+        location: String(50)
+        user_id: String(50)
+      name: geomts_users

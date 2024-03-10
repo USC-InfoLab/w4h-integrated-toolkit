@@ -18,7 +18,7 @@ tools
 .vscode/
 .idea/
 
-# Don't state conf.py
+# Don't state lib_conf.py
 tools/
 
 # Don't stages dataset

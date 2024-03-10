@@ -4,8 +4,8 @@ from sqlalchemy import create_engine
 from loguru import logger
 import urllib.parse
 
-from script.conf import *
-from script.utils import Singleton, load_config, get_db_engine
+from lib.lib_conf import *
+from lib.lib_utils import Singleton, load_config, get_db_engine
 
 data_loader_inited = False
 

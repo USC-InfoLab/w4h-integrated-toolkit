@@ -1,1 +1,9 @@
 database_number: 0
+
+database1:
+  nickname: 'local db'
+  dbms: 'postgresql'
+  host: db # '35.235.95.37' # Replace with your DB host
+  port: 5432 # 5439 # Replace with your DB port
+  user: 'admin'# 'jize' # Replace with your DB username
+  password: 'admin'

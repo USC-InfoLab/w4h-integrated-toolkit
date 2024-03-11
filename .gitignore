@@ -180,3 +180,4 @@ cython_debug/
 
 conf/temp/config.yaml
 conf/db_config.yaml
+/lib

@@ -12,6 +12,12 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
+
+      - name: Fetch code from Repository A
+        uses: actions/checkout@v3
+        with:
+          repository: 'USC-InfoLab/w4h-api'
+          path: '.'
       
       - name: Login to DockerHub
         uses: docker/login-action@v2

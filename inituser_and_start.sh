@@ -1,4 +1,7 @@
 #!/bin/bash
+
+touch "conf/db_config.yaml"
+
 python init_user.py &
 
 python stream_sim.py &

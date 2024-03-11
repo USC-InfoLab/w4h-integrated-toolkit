@@ -1,8 +1,7 @@
 #!/bin/bash
 
-touch "conf/db_config.yaml"
-echo "database_number: 0" > db_config.yaml
 
+cp "conf/db_config_sample.yaml" "conf/db_config.yaml"
 
 python init_user.py &
 

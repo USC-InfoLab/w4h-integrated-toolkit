@@ -1,9 +1,10 @@
-name: Build and push the docker image to DockerHub
+name: Pull API code, Build and push the docker image to DockerHub
 
 on:
   push:
     branches:
       - main
+      - jize
 
 jobs:
   push_to_registry:
@@ -13,7 +14,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Fetch code from Repository A
+      - name: Fetch code from Repository API
         uses: actions/checkout@v3
         with:
           repository: 'USC-InfoLab/w4h-api'

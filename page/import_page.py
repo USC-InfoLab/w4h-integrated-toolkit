@@ -113,7 +113,7 @@ def import_page():
 
         col1, col2 = st.columns([2,5])
         with col1:
-            selected_db_server = st.selectbox("**Select a database server**", get_existing_database_server()).split(' (')[0]
+            selected_db_server = st.selectbox("**Select a database server**", get_existing_database_server())
         with col2:
             new_db_name = st.text_input("Enter new w4h database instance name")
         if st.button("Create"):

@@ -1,7 +1,7 @@
 database_number: 1
 
 database1:
-  nickname: 'local db'
+  nickname: 'Local Database'
   dbms: 'postgresql'
   host: db
   port: 5432

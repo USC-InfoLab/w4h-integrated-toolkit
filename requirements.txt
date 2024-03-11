@@ -21,3 +21,4 @@ geopandas==0.13.2
 shapely==2.0.2
 matplotlib==3.7.4
 statsmodels==0.14.1
+openai=1.13.3

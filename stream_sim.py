@@ -266,7 +266,6 @@ def init_stream():
         Response: A JSON response containing the initialized start time.
     """
     global data_loader_inited
-
     requested_start = request.args.get('start_time', None)
     db_name = request.args.get('db_name', None)
     data_loader = init_dataloader(inited=data_loader_inited,db_name=db_name,start_time = requested_start)

@@ -1,0 +1,8 @@
+database1:
+  dbms: postgresql
+  host: ''
+  nickname:  ''
+  password: ''
+  port: 
+  user: ''
+database_number: 1

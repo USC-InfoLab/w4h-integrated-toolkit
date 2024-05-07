@@ -1,20 +1,23 @@
 version: "1.0"
 services:
-  dashboard:
-#    build:
-#        context: .
-    image: uscimsc/w4h:latest
-    container_name: dashboard
-    ports:
-      - 8501:8501
-    depends_on:
-      - db
-  db:
-    image: postgis/postgis:16-3.4-alpine
-    container_name: postgres-db
-    environment:
-      POSTGRES_DB: admin
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
-    ports:
-      - "5432:5432"
+    dashboard:
+        #build:
+            #context: .
+        #image: uscimsc/w4h:latest
+        build: .
+        container_name: dashboard
+        ports:
+            - 8501:8501
+        depends_on:
+            - db
+    db:
+        build: ./fft
+        image: fft:latest
+        container_name: fft-db
+        environment:
+            POSTGRES_DB: admin
+            POSTGRES_USER: admin
+            POSTGRES_PASSWORD: admin
+        ports:
+            - "8080:5432"
+

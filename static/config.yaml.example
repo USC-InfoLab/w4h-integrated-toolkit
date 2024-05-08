@@ -3,7 +3,7 @@ database_number: 1
 database1:
   nickname: 'local db' # will shows in the selectbox
   dbms: 'postgresql'
-  host: 'db' # Replace with your DB host
+  host: 'localhost' # Replace with your DB host
   port: 5432 # Replace with your DB port
   user: 'admin' # Replace with your DB username
   password: 'admin'

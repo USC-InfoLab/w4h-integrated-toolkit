@@ -28,9 +28,9 @@ First, navigate to the project directory and install the necessary packages usin
 2. **Configure Database Properties:**
 Copy the provided example configuration file to create your own configuration:
     ```bash
-    cp static/config.yaml.example conf/config.yaml.py
+    cp static/config.yaml.example conf/db_config.yaml
     ```
-    Now, edit the `conf.py` file with your desired database properties and credentials. Ensure you have proper access rights and credentials for the database.
+    Now, edit the `db_config.yaml` file with your desired database properties and credentials. Ensure you have proper access rights and credentials for the database.
 
 3. **Stream Simulation:**
 To start the stream simulation service, run the following command:

@@ -7,6 +7,7 @@ services:
     container_name: dashboard
     ports:
       - 8501:8501
+      - 7077:7077
     depends_on:
       - db
   db:

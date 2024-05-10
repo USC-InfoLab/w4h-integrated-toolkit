@@ -26,11 +26,7 @@ First, navigate to the project directory and install the necessary packages usin
     ```
 
 2. **Configure Database Properties:**
-Copy the provided example configuration file to create your own configuration:
-    ```bash
-    cp static/config.yaml.example conf/config.yaml.py
-    ```
-    Now, edit the `conf.py` file with your desired database properties and credentials. Ensure you have proper access rights and credentials for the database.
+Edit the `conf/db_config.yaml` to set up your own database with your desired properties and credentials. We defined a local instance by default. If you don't user docker compose for running W4H and Postgres, replace `host_name='local'` to access the database server.
 
 3. **Stream Simulation:**
 To start the stream simulation service, run the following command:
@@ -53,11 +49,18 @@ docker has been installed in you server. run:
 docker
 ```
 
-to check
+to check.
 ## Setup
 
 Run:
    ```shell
    docker run -dp 8501:8501 uscimsc/w4h:latest 
    ```
-Then access http://{your_server_ip}:8501/ to see the dashboard.
+Then access `http://{your_server_ip}:8501/` to see the dashboard.
+
+# Setup W4H toolkit with Docker Compose
+Make sure to have docker and docker compose installed on your system. Then, run:
+```
+docker compose up --build
+```
+You should be able to access the dashboard and database server through `http://{your_server_ip}:8501`.

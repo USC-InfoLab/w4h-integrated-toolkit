@@ -3,9 +3,10 @@ user.db
 # Don't stage notebooks
 *.ipynb
 
-# Don't stage .vscode and .idea
+# Don't stage .vscode, .idea, and .devcontainer
 .vscode/
 .idea/
+.devcontainer/
 
 
 conf/temp

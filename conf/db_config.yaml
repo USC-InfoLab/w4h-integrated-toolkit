@@ -3,7 +3,7 @@ database_number: 1
 database1:
   nickname: 'local db' # will shows in the selectbox
   dbms: 'postgresql'
-  host: 'localhost' # Replace with your DB host
+  host: 'db' # Replace with your DB host (replace with 'localhost' when not using docker for running W4H)
   port: 5432 # Replace with your DB port
   user: 'admin' # Replace with your DB username
   password: 'admin'
